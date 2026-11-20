@@ -19,6 +19,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/run"
 	"github.com/gingered-cat/asiri/internal/server"
 )
 
@@ -48,6 +49,12 @@ func init() {
 		"lock":    {"lock", "lock the vault now", lockCmd},
 		"clients": {"clients <add NAME [--role R] [--replace] | ls | revoke NAME>", "manage paired clients", clientsCmd},
 		"log":     {"log [--since N] [--limit N] [--json] | log verify", "read or verify the audit log", logCmd},
+		"run":     {"run [--env NAME=REF]... [--stdin REF] [--file NAME=REF]... [--reason TEXT] [--] PROGRAM [ARGS...]", "run a program with secrets it can use but you never see", runCmd},
+		"policy":  {"policy REF [--bins a,b] [--max-grant once|15m|1h]", "show or set which programs may use a secret", policyCmd},
+		"approve": {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
+		"deny":    {"deny ID", "deny a waiting request", denyCmd},
+		"grants":  {"grants", "list live grants", grantsCmd},
+		"revoke":  {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
 		"version": {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}
 }
@@ -70,6 +77,10 @@ func main() {
 		os.Exit(exitUsage)
 	}
 	if err := c.run(ctx, os.Args[2:]); err != nil {
+		var st exitStatus
+		if errors.As(err, &st) {
+			os.Exit(int(st))
+		}
 		var ue usageError
 		if errors.As(err, &ue) || errors.Is(err, flag.ErrHelp) {
 			if !errors.Is(err, flag.ErrHelp) {
@@ -83,6 +94,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "asiri: %s (%s)\n", de.Msg, de.Code)
 		} else {
 			fmt.Fprintln(os.Stderr, "asiri:", err)
+		}
+		var ee *run.ExitError
+		if errors.As(err, &ee) {
+			os.Exit(ee.Code)
 		}
 		os.Exit(exitAsiri)
 	}

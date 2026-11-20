@@ -27,6 +27,16 @@ const (
 	Pair         = "pair"
 	ClientRevoke = "client_revoke"
 	ItemPut      = "item_put"
+	PolicySet    = "policy_set"
+	Request      = "request"
+	Rejected     = "request_rejected"
+	Decision     = "decision"
+	Expired      = "request_expired"
+	Redeem       = "redeem"
+	GrantRevoke  = "grant_revoke"
+	RevokeAll    = "revoke_all"
+	ScrubHit     = "scrub_hit"
+	Anomaly      = "anomaly"
 )
 
 var genesis = make([]byte, sha256.Size)

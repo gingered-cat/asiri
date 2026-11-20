@@ -91,3 +91,28 @@ func TestNewIDSortsAndIsUnique(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+func TestIsInterpreter(t *testing.T) {
+	for _, p := range []string{"/bin/sh", "/bin/bash", "/opt/homebrew/bin/python3.12", "/usr/bin/python3", "node",
+		"/usr/bin/env", "/usr/bin/xargs", "/usr/bin/awk", "/opt/homebrew/bin/pwsh", "/usr/bin/sudo", "ruby3.3"} {
+		if !IsInterpreter(p) {
+			t.Errorf("%s should be refused", p)
+		}
+	}
+	for _, p := range []string{"/opt/homebrew/bin/gh", "/usr/bin/psql", "/usr/local/bin/terraform", "/usr/bin/curl", "/usr/bin/printenv"} {
+		if IsInterpreter(p) {
+			t.Errorf("%s should be allowed", p)
+		}
+	}
+}
+
+func TestClampAndAllowed(t *testing.T) {
+	if Decide1h.Clamp("15m") != Decide15m || Decide15m.Clamp("1h") != Decide15m || Decide1h.Clamp("once") != DecideOnce ||
+		DecideDeny.Clamp("once") != DecideDeny || Decide1h.Clamp("") != Decide1h {
+		t.Fatal("clamp")
+	}
+	if !BinAllowed([]string{"gh"}, "/opt/homebrew/bin/gh") || !BinAllowed([]string{"/usr/bin/psql"}, "/usr/bin/psql") ||
+		BinAllowed([]string{"gh"}, "/usr/bin/ghx") {
+		t.Fatal("allowed")
+	}
+}

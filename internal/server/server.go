@@ -45,6 +45,16 @@ func New(svc *service.Service, log *slog.Logger) *Server {
 	s.handle("POST /v1/clients/{name}/revoke", owner, s.revokeClient)
 	s.handle("GET /v1/audit", owner, s.listAudit)
 	s.handle("GET /v1/audit/verify", owner, s.verifyAudit)
+	s.handle("PUT /v1/items/{vault}/{name}/policy", owner, s.setPolicy)
+	s.handle("POST /v1/requests", anyone, s.createRequest)
+	s.handle("GET /v1/requests", owner, s.pendingRequests)
+	s.handle("GET /v1/requests/{id}", anyone, s.getRequest)
+	s.handle("POST /v1/requests/{id}/decision", anyone, s.decide)
+	s.handle("GET /v1/grants", owner, s.listGrants)
+	s.handle("POST /v1/grants/{id}/redeem", anyone, s.redeem)
+	s.handle("POST /v1/grants/{id}/scrub", anyone, s.scrub)
+	s.handle("POST /v1/grants/{id}/revoke", owner, s.revokeGrant)
+	s.handle("POST /v1/revoke-all", owner, s.revokeAll)
 	return s
 }
 
@@ -313,4 +323,132 @@ func (s *Server) verifyAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, api.VerifyResponse{Rows: n})
+}
+
+func (s *Server) setPolicy(w http.ResponseWriter, r *http.Request) {
+	var req api.PolicyRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	field := req.Field
+	if field == "" {
+		field = domain.DefaultField
+	}
+	ref, err := domain.ParseRef(r.PathValue("vault") + "/" + r.PathValue("name") + "/" + field)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	it, err := s.svc.SetPolicy(r.Context(), clientFrom(r.Context()), ref,
+		domain.Policy{Bins: req.Bins, SSHHosts: req.SSHHosts, MaxGrant: req.MaxGrant})
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.ItemResponse{Item: it})
+}
+
+func (s *Server) createRequest(w http.ResponseWriter, r *http.Request) {
+	var req api.CreateRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	out, reused, err := s.svc.CreateRequest(r.Context(), clientFrom(r.Context()), service.RequestInput{
+		Ref: req.Ref, BinPath: req.BinPath, BinSHA256: req.BinSHA256, Argv: req.Argv, Cwd: req.Cwd, Reason: req.Reason})
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	status := http.StatusAccepted
+	if reused {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, api.RequestResponse{Request: out, Reused: reused})
+}
+
+func (s *Server) pendingRequests(w http.ResponseWriter, r *http.Request) {
+	rs, err := s.svc.PendingRequests(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.RequestsResponse{Requests: rs})
+}
+
+// maxWait stays under the server's 60 s write timeout.
+const maxWait = 50 * time.Second
+
+func (s *Server) getRequest(w http.ResponseWriter, r *http.Request) {
+	wait, _ := time.ParseDuration(r.URL.Query().Get("wait"))
+	out, err := s.svc.WaitRequest(r.Context(), clientFrom(r.Context()), domain.RequestID(r.PathValue("id")), min(wait, maxWait))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.RequestResponse{Request: out})
+}
+
+func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
+	var req api.DecisionRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	out, err := s.svc.Decide(r.Context(), clientFrom(r.Context()), domain.RequestID(r.PathValue("id")), req.Decision, req.Method)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.RequestResponse{Request: out})
+}
+
+func (s *Server) listGrants(w http.ResponseWriter, r *http.Request) {
+	gs, err := s.svc.ActiveGrants(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.GrantsResponse{Grants: gs})
+}
+
+func (s *Server) redeem(w http.ResponseWriter, r *http.Request) {
+	g, sec, err := s.svc.Redeem(r.Context(), clientFrom(r.Context()), domain.GrantID(r.PathValue("id")))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	defer sec.Zero()
+	writeJSON(w, http.StatusOK, api.RedeemResponse{Grant: g, Value: sec.Reveal()})
+}
+
+func (s *Server) scrub(w http.ResponseWriter, r *http.Request) {
+	var req api.ScrubReport
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.svc.ReportScrub(r.Context(), clientFrom(r.Context()), domain.GrantID(r.PathValue("id")), req.Hits); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) revokeGrant(w http.ResponseWriter, r *http.Request) {
+	if err := s.svc.RevokeGrant(r.Context(), clientFrom(r.Context()).ID, domain.GrantID(r.PathValue("id"))); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) revokeAll(w http.ResponseWriter, r *http.Request) {
+	n, err := s.svc.RevokeAll(r.Context(), clientFrom(r.Context()).ID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.RevokeAllResponse{Revoked: n})
 }
