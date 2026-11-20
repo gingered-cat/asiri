@@ -1,0 +1,28 @@
+# asiri:smol. Run from this directory:
+#
+#   asiri server keygen -o ~/.config/asiri/master.key   # once (or use a release binary)
+#   docker compose up -d
+#   docker compose exec asiri asiri server pair-code     # prints the pair command
+#
+# The server is only reachable from this machine (127.0.0.1).
+services:
+  asiri:
+    image: ghcr.io/gingered-cat/asiri:${ASIRI_VERSION:-dev}
+    build: ..
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7420:7420"
+    volumes:
+      - asiri-data:/data
+    secrets:
+      - asiri_master
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+secrets:
+  asiri_master:
+    file: ${ASIRI_KEY_FILE:-${HOME}/.config/asiri/master.key}
+
+volumes:
+  asiri-data: {}
