@@ -45,8 +45,11 @@ button:active { transform: scale(0.97); }
 /* the demo: an ASCII lock beside the transcript of one request */
 .demo { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; margin-top: 88px;
   padding: 24px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.lock { font: inherit; line-height: 1.25; font-size: 16px; color: var(--ink); min-width: 13ch; }
-.lock .on { color: var(--accent); }
+.lock { position: relative; font: inherit; line-height: 1.25; font-size: 16px; color: var(--ink); width: 13ch; padding-top: 3.75em; }
+.lock .shackle, .lock .lock-body { display: block; white-space: pre; }
+.lock .shackle { position: absolute; top: 0; left: 0; will-change: transform; }
+/* the body sits over the shackle, so the legs slide down into it */
+.lock .lock-body { position: relative; z-index: 1; background: var(--paper); }
 /* the one red event: lights instantly (no transition in), fades slowly out */
 .lock .k { transition: color 700ms ease-out; }
 .lock.lit .k { color: var(--accent); transition: none; }
