@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1 built (vault, server, pairing, `add`, `ls`, audit); M2+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: M1–M5 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`, SSH keys that sign inside the server, Apple/Google CSV import); M6+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -131,13 +131,14 @@ sequenceDiagram
     S-->>CLI: 200 {grant_id}
   else needs approval
     S-->>CLI: 202 {request_id, summary}
-    CLI->>R: rex do asiri_approve id title detail --timeout 120
+    CLI->>R: rex do asiri_approve --args {id, title, detail} --json
     R->>P: palette: "claude wants dev/github · gh pr create · open PR"
     P->>R: Allow once
-    R-->>CLI: {"result":"once"}
-    CLI->>S: POST /v1/requests/{id}/decision {once, method: rex}
+    R->>S: rex.exec asiri approve ID --for once (owner profile)
     S->>S: tx: request→approved, grant created, audit ×2
-    S-->>CLI: 200 {grant_id}
+    R-->>CLI: {"result":"once"}
+    CLI->>S: GET /v1/requests/{id}
+    S-->>CLI: approved {grant_id}
   end
   CLI->>S: POST /v1/grants/{id}/redeem
   S->>S: tx: uses_left-1 where uses_left>0 and not expired/revoked, audit
@@ -154,21 +155,31 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Ssh as ssh (child)
-  participant SA as asiri ssh-agent
+  participant Ssh as ssh (OpenSSH 8.9+)
+  participant SA as asiri agent (asiri ssh / ssh-agent)
   participant S as asiri server
   participant R as Rex / approver
 
-  Ssh->>SA: session-bind@openssh.com {host key, session id}
-  SA->>SA: remember host key for this connection
-  Ssh->>SA: sign request {pubkey, data}
-  SA->>S: POST /v1/requests {ssh key ref, host key fingerprint}
-  S->>S: rules: host fingerprint ∈ policy.ssh_hosts
-  S-->>SA: 202 → approval as in 4.1 → grant
-  SA->>S: POST /v1/ssh/sign {grant, data}
-  S-->>SA: signature (key stays in server)
+  Ssh->>SA: session-bind@openssh.com {host key, session id, host's signature}
+  SA->>SA: verify the host's signature, remember SHA256 host fingerprint
+  Ssh->>SA: list identities
+  SA->>S: GET /v1/ssh/keys
+  SA-->>Ssh: only keys whose ssh_hosts include this host
+  Ssh->>SA: sign {pubkey, userauth data}
+  SA->>SA: data starts with the bound session id? not forwarded?
+  SA->>S: POST /v1/requests {ref, host_fp}
+  S->>S: rules: ssh_key kind, host_fp ∈ policy.ssh_hosts
+  S-->>SA: 202 → approval as in 4.1 → grant (bound to client, key, host)
+  SA->>S: POST /v1/ssh/sign {grant, data, flags}
+  S->>S: spend a use, sign inside the server, audit ssh_sign
+  S-->>SA: signature
   SA-->>Ssh: signature
 ```
+
+- The private key is generated in the server (`asiri add --ssh-generate`) or imported once (`asiri add --kind ssh_key --stdin`); it is never returned. `POST /v1/grants/{id}/redeem` refuses SSH grants.
+- The agent refuses: signing without a session-bind (older OpenSSH, or a client that doesn't send it), data that isn't a login for the bound session (`ssh-keygen -Y sign`, git commit signing), forwarded agent connections, and `ssh-add`.
+- `asiri policy REF --ssh-hosts staging` resolves `staging` with `ssh -G` (HostName, Port, HostKeyAlias, UserKnownHostsFile) and `ssh-keygen -F`, and stores `staging=SHA256:…` for each host key found. A host not in known_hosts is refused: connect once with plain ssh to check its key.
+- `asiri ssh ARGS` runs ssh with a private agent socket for that one command (`-o IdentityAgent=…`), so approval notes reach the agent's output. `asiri ssh-agent` is a long-running socket for git, rsync and the rest; its approvals go to Rex (or `asiri approve`).
 
 ### 4.3 Pairing (once per profile)
 
@@ -258,7 +269,8 @@ CREATE TABLE policies  (item_id TEXT PRIMARY KEY,             -- per item, survi
 CREATE TABLE clients   (id TEXT PRIMARY KEY, name TEXT UNIQUE, role TEXT, cert_fp TEXT UNIQUE,
                         created_at INT, revoked_at INT);
 CREATE TABLE pair_codes (hash BLOB PRIMARY KEY, name TEXT, role TEXT, expires_at INT, used_at INT);
--- M2 (002_grants.sql)
+-- M2 (002_grants.sql): requests and grants also store ref, argv, decision and method for display
+-- M4 (003_ssh.sql): items.public_key; requests.host_fp and grants.host_fp; grants_reuse adds host_fp
 CREATE TABLE requests  (id TEXT PRIMARY KEY, client_id TEXT, item_id TEXT, bin_path TEXT,
                         bin_sha256 TEXT, host_fp TEXT, argv_preview TEXT, cwd TEXT, reason TEXT,
                         status TEXT, created_at INT, decided_at INT);
@@ -268,7 +280,7 @@ CREATE TABLE grants    (id TEXT PRIMARY KEY, request_id TEXT UNIQUE, client_id T
                         uses_left INT, expires_at INT, revoked_at INT);
 CREATE INDEX grants_reuse ON grants(client_id, item_id, bin_sha256, expires_at);
 CREATE TABLE audit     (seq INTEGER PRIMARY KEY, ts INT, client_id TEXT, event TEXT,
-                        item_id TEXT, detail TEXT, prev_hash BLOB, hash BLOB);  -- M2 adds grant_id
+                        item_id TEXT, detail TEXT, prev_hash BLOB, hash BLOB);  -- request/grant ids go in detail
 ```
 - IDs are ULIDs (sortable, no coordination).
 - Database files are created 0600; WAL and SHM files inherit it.
@@ -296,10 +308,10 @@ HTTPS, TLS 1.3 only, client certificate required (except `/v1/pair`). JSON. Erro
 | GET | `/v1/items?q=` | agent | metadata and policy, never values |
 | PUT | `/v1/items/{vault}/{name}` | owner | new version; value in body |
 | PUT | `/v1/items/{vault}/{name}/policy` | owner | bins, ssh_hosts, max_grant, reveal_to_agent |
-| POST | `/v1/import/{apple\|google}` | owner | CSV body, streamed |
+| POST | `/v1/import` | owner | parsed logins as JSON (the CLI parses the CSV); one transaction; up to 64 MiB |
 | POST | `/v1/requests` | agent | `Idempotency-Key` header; returns 200 grant / 202 pending / 403 rejected |
 | GET | `/v1/requests/{id}?wait=30s` | agent | long poll |
-| POST | `/v1/requests/{id}/decision` | agent\* / owner | first decision wins |
+| POST | `/v1/requests/{id}/decision` | owner | first decision wins; agents can never decide, not even their own requests |
 | POST | `/v1/grants/{id}/redeem` | agent | not idempotent on purpose |
 | POST | `/v1/ssh/sign` | agent | grant + data → signature |
 | POST | `/v1/grants/{id}/revoke`, `/v1/revoke-all` | owner | kill switch |
@@ -308,7 +320,7 @@ HTTPS, TLS 1.3 only, client certificate required (except `/v1/pair`). JSON. Erro
 | POST | `/v1/pair` | none (code) | one-time code |
 | GET | `/v1/health` | none | `{sealed: bool, version}` |
 
-\* In v0.1 an agent-profile CLI may report the decision it got from Rex or the tty. See §11.
+Decisions come from the owner's profile: the Rex plugin runs `asiri approve`/`deny` itself (through `rex.exec`), and `asiri approve` runs in the person's terminal. The agent's CLI only waits. See §11.
 
 Error codes: `sealed`, `not_found`, `not_allowed` (bin/host/role), `interpreter_refused`, `denied`, `expired`, `spent`, `revoked`, `rate_limited`, `conflict`.
 
@@ -550,9 +562,11 @@ Lock order: never hold the broker or limiter mutex while in a DB transaction. Pu
 - `SSHAgent` serves each socket connection in its own goroutine; per-connection state (the bound host key) lives in that goroutine only.
 
 ### Scrubber detail
-- Aho–Corasick automaton built once per run from all values and their forms.
-- Keeps a tail of `maxPatternLen-1` bytes between writes so a match split across two reads is still caught; `Flush` on child exit.
-- Fuzz test: random values, random encodings, random chunk boundaries; no raw form ever reaches the output.
+- Patterns: each value as raw, base64 (std, raw std, url, raw url), hex (lower, upper), query- and path-escaped. Values under 4 bytes aren't scrubbed (they would match ordinary output).
+- Finds every match with `bytes.Index` (SIMD; ~750 MB/s on an M-series Mac with two values, so no Aho–Corasick needed), then **merges overlapping matches** and replaces each group with its labels. Without merging, base64 padding of one value could swallow the first byte of the next and leak the rest; a fuzz case found this.
+- Holds back the last `maxPatternLen-1` bytes between writes, and never commits a group that a later write could still extend; `Flush` on child exit.
+- Fuzz test: 8 seeds × 500 cases of random values, encodings and chunk boundaries; no form of any value may survive, and other output must pass unchanged.
+- The child's stdout and stderr are pipes, not a terminal, so programs may drop colours or refuse interactive prompts. A pty mode is a later option.
 
 ---
 
@@ -588,11 +602,11 @@ Lock order: never hold the broker or limiter mutex while in a DB transaction. Pu
 | Long polling | WebSocket / SSE | decisions are rare and short-lived; plain HTTP is simpler | a held connection per waiting request (a handful) |
 | Allow-lists + scrubbing | full sandboxing of the child | works today on stock macOS | an allowed binary with its own exfil path (e.g. `gh gist create`) is still a gap |
 | `--env` supported | stdin/file only | many tools only read env | env visible to same-user processes via `ps eww` while the child runs; docs say prefer stdin/file |
-| CLI-reported approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | a process running as the person can forge approvals; fixed in v0.2 (see below) |
+| Owner-profile approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | agents can't decide through the API, but a process running as the person can read the owner profile's key and approve; fixed in v0.2 (see below) |
 | One binary | separate server and client builds | one release, one version, shared `domain` | server code in the client binary (a few MB) |
 
 ### v0.2: signed approvals
-`Approver` gets a fourth implementation: a small signed macOS helper holding an approval key in the Secure Enclave, Touch ID on every signature. `Decide` then requires `sig = Sign(request_id | item | bin_sha256 | host_fp | decision | expires_at)` from an enrolled key, and the `agent*` row in §7 goes away. Rex stays as the notification and routing. No caller changes, because the interface already exists.
+`Approver` gets a fourth implementation: a small signed macOS helper holding an approval key in the Secure Enclave, Touch ID on every signature. `Decide` then requires `sig = Sign(request_id | item | bin_sha256 | host_fp | decision | expires_at)` from an enrolled key, so holding the owner profile's key is no longer enough. Rex stays as the notification and routing. No caller changes, because the interface already exists.
 
 ---
 
@@ -625,7 +639,7 @@ internal/approve/       Approver, Chain, rex, tty, wait
 internal/run/           Runner, deliveries, scrubber
 internal/sshagent/      agent socket, session-bind, remote signing
 internal/mcp/           stdio MCP server
-rex/asiri.lua           Rex approval action
+internal/rexplug/       `asiri rex install`: asiri.lua plugin + managed init.lua block
 skill/skill.md          agent rules
 deploy/                 Dockerfile, compose.yaml
 dev/                    go run ./dev ci

@@ -33,6 +33,8 @@ type Config struct {
 	Now     func() time.Time // defaults to time.Now
 	// FailDelay slows down wrong passphrases and pairing codes. Defaults to 1s.
 	FailDelay time.Duration
+	// Per-client request rate limit. Defaults to 30 a minute, bursts of 10.
+	RequestsPerMinute, RequestBurst int
 }
 
 type Service struct {
@@ -42,6 +44,9 @@ type Service struct {
 	keyFile   string
 	now       func() time.Time
 	failDelay time.Duration
+	rules     []Rule
+	limit     *limiter
+	broker    broker
 }
 
 func New(c Config) *Service {
@@ -51,7 +56,11 @@ func New(c Config) *Service {
 	if c.FailDelay == 0 {
 		c.FailDelay = time.Second
 	}
-	return &Service{store: c.Store, vault: c.Vault, ca: c.CA, keyFile: c.KeyFile, now: c.Now, failDelay: c.FailDelay}
+	if c.RequestsPerMinute == 0 {
+		c.RequestsPerMinute, c.RequestBurst = 30, 10
+	}
+	return &Service{store: c.Store, vault: c.Vault, ca: c.CA, keyFile: c.KeyFile, now: c.Now, failDelay: c.FailDelay,
+		rules: defaultRules(), limit: newLimiter(c.RequestsPerMinute, c.RequestBurst)}
 }
 
 func (s *Service) fail() { time.Sleep(s.failDelay) }
@@ -124,10 +133,22 @@ func (s *Service) PutItem(ctx context.Context, by domain.Client, ref domain.Ref,
 	if sec.Len() > 64<<10 {
 		return domain.Item{}, domain.Errorf(domain.CodeInvalid, "value is larger than 64 KiB")
 	}
+	if kind == "" {
+		if cur, err := s.vault.Lookup(ctx, ref); err == nil {
+			kind = cur.Kind
+		}
+	}
+	pub := ""
+	if kind == domain.KindSSHKey {
+		var err error
+		if pub, err = sshPublicKey(sec.Reveal(), ref.String()); err != nil {
+			return domain.Item{}, err
+		}
+	}
 	var it domain.Item
 	err := s.store.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		if it, err = s.vault.PutTx(ctx, tx, ref, kind, sec, s.now()); err != nil {
+		if it, err = s.vault.PutTx(ctx, tx, ref, kind, sec, pub, s.now()); err != nil {
 			return err
 		}
 		return audit.Append(ctx, tx, s.now(), domain.AuditEvent{ClientID: by.ID, Event: audit.ItemPut, ItemID: it.ID,

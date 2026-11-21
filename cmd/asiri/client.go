@@ -55,6 +55,10 @@ func addCmd(ctx context.Context, args []string) error {
 	profile := profileFlag(fs)
 	kind := fs.String("kind", "", "token, password, ssh_key, login or note (default: token, or the existing kind)")
 	stdin := fs.Bool("stdin", false, "read the value from stdin instead of the terminal")
+	generate := fs.Bool("ssh-generate", false, "make a new Ed25519 SSH key inside the server and print its public key")
+	bins := fs.String("bins", "", "comma-separated programs that may receive it (same as asiri policy --bins)")
+	sshHosts := fs.String("ssh-hosts", "", "SSH keys: comma-separated hosts it may sign in to (same as asiri policy --ssh-hosts)")
+	maxGrant := fs.String("max-grant", "", "longest approval allowed: once, 15m or 1h")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -70,25 +74,62 @@ func addCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	var b []byte
-	if *stdin {
-		b, err = readStdin()
+	var it domain.Item
+	if *generate {
+		if it, err = c.GenerateSSHKey(ctx, ref); err != nil {
+			return err
+		}
+		fmt.Printf("made %s (ssh key, version %d); the private key stays in the asiri server\n", it.Ref, it.Version)
 	} else {
-		b, err = readHidden(fmt.Sprintf("value for %s (hidden): ", ref))
+		var b []byte
+		if *stdin {
+			b, err = readStdin()
+		} else {
+			b, err = readHidden(fmt.Sprintf("value for %s (hidden): ", ref))
+		}
+		if err != nil {
+			return err
+		}
+		sec := domain.NewSecret(b)
+		defer sec.Zero()
+		if sec.Len() == 0 {
+			return fmt.Errorf("empty value; nothing stored")
+		}
+		if it, err = c.PutItem(ctx, ref, domain.Kind(*kind), sec); err != nil {
+			return err
+		}
+		fmt.Printf("stored %s (%s, version %d)\n", it.Ref, it.Kind, it.Version)
 	}
-	if err != nil {
-		return err
+	if *bins != "" || *maxGrant != "" || *sshHosts != "" {
+		p := it.Policy
+		if *bins != "" {
+			p.Bins = splitList(*bins)
+		}
+		if *maxGrant != "" {
+			p.MaxGrant = *maxGrant
+		}
+		if *sshHosts != "" {
+			if p.SSHHosts, err = resolveSSHHosts(ctx, splitList(*sshHosts)); err != nil {
+				return err
+			}
+		}
+		if it, err = c.SetPolicy(ctx, ref, p); err != nil {
+			return err
+		}
 	}
-	sec := domain.NewSecret(b)
-	defer sec.Zero()
-	if sec.Len() == 0 {
-		return fmt.Errorf("empty value; nothing stored")
+	switch {
+	case it.Kind == domain.KindSSHKey:
+		fmt.Printf("public key (put it in the host's ~/.ssh/authorized_keys):\n\n  %s\n\n", it.PublicKey)
+		if len(it.Policy.SSHHosts) == 0 {
+			fmt.Printf("no host may use it yet; allow one with: asiri policy %s --ssh-hosts HOST\n", it.Ref)
+		} else {
+			fmt.Printf("may sign in to %s\n", strings.Join(it.Policy.SSHHosts, ", "))
+		}
+	case len(it.Policy.Bins) == 0:
+		fmt.Printf("no program may use it yet; allow one with: asiri policy %s --bins gh\n", it.Ref)
+	default:
+		fmt.Printf("may be used by %s\n", strings.Join(it.Policy.Bins, ", "))
 	}
-	it, err := c.PutItem(ctx, ref, domain.Kind(*kind), sec)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("stored %s (%s, version %d)\n", it.Ref, it.Kind, it.Version)
 	return nil
 }
 
@@ -116,9 +157,21 @@ func lsCmd(ctx context.Context, args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "REF\tKIND\tVER\tUPDATED")
+	fmt.Fprintln(tw, "REF\tKIND\tVER\tPROGRAMS\tUPDATED")
 	for _, it := range items {
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", it.Ref, it.Kind, it.Version, it.UpdatedAt.Local().Format("2006-01-02 15:04"))
+		bins := strings.Join(it.Policy.Bins, ",")
+		if it.Kind == domain.KindSSHKey {
+			var names []string
+			for _, h := range it.Policy.SSHHosts {
+				n, _, _ := strings.Cut(h, "=")
+				names = append(names, "ssh:"+n)
+			}
+			bins = strings.Join(names, ",")
+		}
+		if bins == "" {
+			bins = "-"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", it.Ref, it.Kind, it.Version, bins, it.UpdatedAt.Local().Format("2006-01-02 15:04"))
 	}
 	return tw.Flush()
 }
@@ -296,7 +349,7 @@ func logCmd(ctx context.Context, args []string) error {
 			who = "server"
 		}
 		var detail []string
-		for _, k := range []string{"ref", "version", "kind", "name", "role", "mode"} {
+		for _, k := range []string{"ref", "bin", "decision", "method", "asked", "hits", "code", "version", "kind", "name", "role", "mode", "bins", "max_grant", "reason", "grants", "requests", "source", "vault", "logins", "created", "updated", "unchanged"} {
 			if v, ok := ev.Detail[k]; ok {
 				detail = append(detail, k+"="+v)
 			}

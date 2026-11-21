@@ -45,7 +45,7 @@ func New(p *Profile) (*Client, error) {
 }
 
 func newHTTP(tc *tls.Config) *http.Client {
-	return &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{TLSClientConfig: tc, ForceAttemptHTTP2: true}}
+	return &http.Client{Timeout: 70 * time.Second, Transport: &http.Transport{TLSClientConfig: tc, ForceAttemptHTTP2: true}}
 }
 
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
@@ -221,4 +221,93 @@ func HealthInsecure(ctx context.Context, server string) (api.Health, error) {
 	tc := &tls.Config{MinVersion: tls.VersionTLS13, InsecureSkipVerify: true}
 	var h api.Health
 	return h, call(ctx, newHTTP(tc), "GET", strings.TrimRight(server, "/")+"/v1/health", nil, &h)
+}
+
+// SetPolicy replaces ref's policy.
+func (c *Client) SetPolicy(ctx context.Context, ref domain.Ref, p domain.Policy) (domain.Item, error) {
+	var r api.ItemResponse
+	path := "/v1/items/" + url.PathEscape(ref.Vault) + "/" + url.PathEscape(ref.Name) + "/policy"
+	return r.Item, c.do(ctx, "PUT", path, api.PolicyRequest{Field: ref.Field, Bins: p.Bins, SSHHosts: p.SSHHosts, MaxGrant: p.MaxGrant}, &r)
+}
+
+// GenerateSSHKey makes an Ed25519 key inside the server.
+func (c *Client) GenerateSSHKey(ctx context.Context, ref domain.Ref) (domain.Item, error) {
+	var r api.ItemResponse
+	path := "/v1/items/" + url.PathEscape(ref.Vault) + "/" + url.PathEscape(ref.Name) + "/ssh-key"
+	return r.Item, c.do(ctx, "POST", path, api.GenerateSSHKey{Field: ref.Field}, &r)
+}
+
+func (c *Client) SSHKeys(ctx context.Context) ([]domain.Item, error) {
+	var r api.ItemsResponse
+	return r.Items, c.do(ctx, "GET", "/v1/ssh/keys", nil, &r)
+}
+
+func (c *Client) SSHSign(ctx context.Context, gid domain.GrantID, data []byte, flags uint32) (api.SSHSignature, error) {
+	var r api.SSHSignature
+	return r, c.do(ctx, "POST", "/v1/ssh/sign", api.SSHSignRequest{GrantID: gid, Data: data, Flags: flags}, &r)
+}
+
+func (c *Client) CreateRequest(ctx context.Context, req api.CreateRequest) (api.RequestResponse, error) {
+	var r api.RequestResponse
+	return r, c.do(ctx, "POST", "/v1/requests", req, &r)
+}
+
+// Request returns a request, waiting up to wait for it to stop being pending.
+func (c *Client) Request(ctx context.Context, id domain.RequestID, wait time.Duration) (domain.Request, error) {
+	var r api.RequestResponse
+	q := ""
+	if wait > 0 {
+		q = "?wait=" + wait.String()
+	}
+	return r.Request, c.do(ctx, "GET", "/v1/requests/"+url.PathEscape(string(id))+q, nil, &r)
+}
+
+func (c *Client) PendingRequests(ctx context.Context) ([]domain.Request, error) {
+	var r api.RequestsResponse
+	return r.Requests, c.do(ctx, "GET", "/v1/requests", nil, &r)
+}
+
+// Decide records a decision. On a conflict it returns the request as it now
+// stands along with the error.
+func (c *Client) Decide(ctx context.Context, id domain.RequestID, d domain.Decision, m domain.Method) (domain.Request, error) {
+	var r api.RequestResponse
+	err := c.do(ctx, "POST", "/v1/requests/"+url.PathEscape(string(id))+"/decision", api.DecisionRequest{Decision: d, Method: m}, &r)
+	if domain.CodeOf(err) == domain.CodeConflict {
+		cur, gerr := c.Request(ctx, id, 0)
+		if gerr == nil {
+			return cur, err
+		}
+	}
+	return r.Request, err
+}
+
+// Redeem spends a grant. The caller must Zero the returned secret.
+func (c *Client) Redeem(ctx context.Context, id domain.GrantID) (domain.Grant, domain.Secret, error) {
+	var r api.RedeemResponse
+	err := c.do(ctx, "POST", "/v1/grants/"+url.PathEscape(string(id))+"/redeem", struct{}{}, &r)
+	return r.Grant, domain.NewSecret(r.Value), err
+}
+
+func (c *Client) ReportScrub(ctx context.Context, id domain.GrantID, hits int) error {
+	return c.do(ctx, "POST", "/v1/grants/"+url.PathEscape(string(id))+"/scrub", api.ScrubReport{Hits: hits}, nil)
+}
+
+func (c *Client) Grants(ctx context.Context) ([]domain.Grant, error) {
+	var r api.GrantsResponse
+	return r.Grants, c.do(ctx, "GET", "/v1/grants", nil, &r)
+}
+
+func (c *Client) RevokeGrant(ctx context.Context, id domain.GrantID) error {
+	return c.do(ctx, "POST", "/v1/grants/"+url.PathEscape(string(id))+"/revoke", struct{}{}, nil)
+}
+
+func (c *Client) RevokeAll(ctx context.Context) (int, error) {
+	var r api.RevokeAllResponse
+	return r.Revoked, c.do(ctx, "POST", "/v1/revoke-all", struct{}{}, &r)
+}
+
+// Import sends parsed logins. The request body holds the values.
+func (c *Client) Import(ctx context.Context, req api.ImportRequest) (api.ImportResult, error) {
+	var r api.ImportResult
+	return r, c.do(ctx, "POST", "/v1/import", req, &r)
 }

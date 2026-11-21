@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>asiri: let agents use secrets without seeing them</title>
+<meta name="description" content="asiri keeps your secrets in a vault your agents can't read. An agent asks, you approve, and asiri hands the secret to the command that needs it. The agent gets the result, never the secret.">
+<meta property="og:title" content="asiri">
+<meta property="og:description" content="let agents use secrets without seeing them.">
+<meta property="og:url" content="https://asiri.run">
+<meta name="theme-color" content="#F3EFE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14120F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <nav>
+      <a href="#how">how</a>
+      <a href="/skill.md">skill.md</a>
+      <a href="https://github.com/gingered-cat/asiri">github</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>let agents use secrets <strong>without seeing them.</strong></h1>
+    <p class="sub"><em lang="yo">àṣírí</em> is Yoruba for "secret". An agent asks for <code>asiri://dev/github</code>, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.</p>
+
+    <p class="prompt" id="prompt">&gt; Read https://asiri.run/skill.md. From now on, ask me through asiri before using any secret, and never print one.</p>
+    <div class="actions">
+      <button type="button" id="copy" data-copy="prompt">copy prompt</button>
+      <a href="#run">or run the server first</a>
+    </div>
+  </div>
+
+  <figure class="demo" aria-label="An agent runs gh with a GitHub token from asiri. You allow it once; the agent only ever sees a placeholder.">
+    <pre class="lock" id="lock" aria-hidden="true"></pre>
+    <ol class="log" id="log" aria-hidden="true">
+      <li data-at="0"><span>agent</span><span>asiri run --env GH_TOKEN=asiri://dev/github <span class="nw">-- gh pr create --fill</span></span></li>
+      <li data-at="1"><span>asiri</span><span>claude wants asiri://dev/github · "open the PR"</span></li>
+      <li data-at="2" class="you"><span>you</span><span>› allow once</span></li>
+      <li data-at="3"><span>gh</span><span>https://github.com/you/api/pull/42</span></li>
+      <li data-at="4"><span>agent</span><span>echo $GH_TOKEN → <b>[asiri:asiri://dev/github]</b></span></li>
+    </ol>
+  </figure>
+
+  <section id="how" class="steps">
+    <h2>how it works</h2>
+    <div class="row"><span>01</span><span>store</span><span>You add a secret once. It's typed without echo and sealed in a vault that runs in a container on your machine. <code>asiri ls</code> shows names, never values.</span></div>
+    <div class="row"><span>02</span><span>approve</span><span>An agent asks for it by name, with a reason. You answer in Rex, in your terminal, or with <code>asiri approve</code>: once, for 15 minutes, or for an hour.</span></div>
+    <div class="row"><span>03</span><span>use</span><span>asiri hands the value to the one program allowed to receive it and scrubs it from the output. The agent gets the result.</span></div>
+  </section>
+
+  <section class="table">
+    <h2>three ways in</h2>
+    <div class="grid delivery">
+      <div class="row head"><span>flag</span><span>the program gets it</span><span>note</span></div>
+      <div class="row"><span>--stdin REF</span><span>on its stdin</span><span>best when the program reads it</span></div>
+      <div class="row"><span>--file NAME=REF</span><span>through a one-time pipe</span><span>never on disk; readable once</span></div>
+      <div class="row"><span>--env NAME=REF</span><span>as an environment variable</span><span>easiest</span></div>
+    </div>
+  </section>
+
+  <section class="wont">
+    <h2>what asiri won't do</h2>
+    <div class="row"><span>✗</span><span>hand a secret to a shell, interpreter or wrapper (<code>sh</code>, <code>python</code>, <code>node</code>, <code>env</code>, <code>sudo</code>, ...). They could send it anywhere. Exit <code>126</code>.</span></div>
+    <div class="row"><span>✗</span><span>hand it to a program that isn't on the secret's allow-list. Exit <code>126</code>.</span></div>
+    <div class="row"><span>✗</span><span>let the value reach you or the agent in the output. It, and its base64, hex and URL forms, become <code>[asiri:…]</code>.</span></div>
+    <div class="row"><span>✗</span><span>let an SSH key leave the server. The server signs, and only for the hosts you allowed.</span></div>
+    <div class="row"><span>✗</span><span>let an agent approve its own request. The server refuses decisions from agent profiles.</span></div>
+  </section>
+
+  <section id="run" class="quick">
+    <h2>run it</h2>
+    <pre><code><span class="c"># the server: a container on 127.0.0.1:7420</span>
+asiri server keygen -o ~/.config/asiri/master.key
+cd deploy &amp;&amp; docker compose up -d
+
+<span class="c"># pair this machine, then store a secret</span>
+asiri pair --code &lt;code&gt;
+asiri add dev/github
+
+<span class="c"># only gh may receive it</span>
+asiri policy dev/github --bins gh --max-grant 1h</code></pre>
+    <p class="note">One Go binary: the server in the container and the CLI on your machine. The vault is SQLite, encrypted with XChaCha20-Poly1305 and a key only you hold. Clients pair over mutual TLS, and every change lands in a hash-chained audit log.</p>
+  </section>
+
+  <section class="table">
+    <h2>for agents</h2>
+    <div class="grid links">
+      <div class="row"><span>skill</span><a href="/skill.md">https://asiri.run/skill.md</a><span>read this first</span></div>
+      <div class="row"><span>cli</span><span>asiri run · asiri ssh · asiri ls</span><span>today</span></div>
+      <div class="row"><span>mcp</span><span>an MCP server</span><span>next</span></div>
+      <div class="row"><span>source</span><a href="https://github.com/gingered-cat/asiri">github.com/gingered-cat/asiri</a><span>apache-2.0</span></div>
+    </div>
+    <p class="note"><b>v0.1 in progress.</b> Works today: the encrypted vault, pairing, <code>asiri run</code>, approvals from Rex or the terminal, SSH keys that sign inside the server, and importing from Apple Passwords and Google Password Manager. Next: the MCP server.</p>
+  </section>
+
+  <footer>
+    <span>asiri · <span lang="yo">àṣírí</span></span>
+    <nav>
+      <a href="/skill.md">skill.md</a>
+      <a href="https://github.com/gingered-cat/asiri">github</a>
+      <a href="https://github.com/gingered-cat/asiri/blob/main/LICENSE">license</a>
+    </nav>
+  </footer>
+</main>
+<script src="/app.js" defer></script>
+</body>
+</html>

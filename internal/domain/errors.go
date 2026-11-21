@@ -16,6 +16,11 @@ const (
 	CodeConflict        Code = "conflict"
 	CodeSealed          Code = "sealed"
 	CodeRateLimited     Code = "rate_limited"
+	CodeInterpreter     Code = "interpreter_refused"
+	CodeDenied          Code = "denied"
+	CodeExpired         Code = "expired"
+	CodeSpent           Code = "spent"
+	CodeRevoked         Code = "revoked"
 	CodeInternal        Code = "internal"
 )
 

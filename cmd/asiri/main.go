@@ -19,6 +19,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/run"
 	"github.com/gingered-cat/asiri/internal/server"
 )
 
@@ -39,16 +40,28 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"server":  {"server <init|run|keygen|pair-code|health> ...", "run or set up the server (in the container)", serverCmd},
-		"pair":    {"pair --code CODE [--server URL] [--profile P] [--force]", "pair this machine with a server", pairCmd},
-		"add":     {"add REF [--kind K] [--stdin]", "store a secret (typed without echo, or from stdin)", addCmd},
-		"ls":      {"ls [QUERY] [--json]", "list secrets (names only, never values)", lsCmd},
-		"status":  {"status", "show the profile, server and lock state", statusCmd},
-		"unlock":  {"unlock", "unlock the vault", unlockCmd},
-		"lock":    {"lock", "lock the vault now", lockCmd},
-		"clients": {"clients <add NAME [--role R] [--replace] | ls | revoke NAME>", "manage paired clients", clientsCmd},
-		"log":     {"log [--since N] [--limit N] [--json] | log verify", "read or verify the audit log", logCmd},
-		"version": {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
+		"server":    {"server <init|run|keygen|pair-code|health> ...", "run or set up the server (in the container)", serverCmd},
+		"pair":      {"pair --code CODE [--server URL] [--profile P] [--force]", "pair this machine with a server", pairCmd},
+		"add":       {"add REF [--kind K] [--stdin]", "store a secret (typed without echo, or from stdin)", addCmd},
+		"ls":        {"ls [QUERY] [--json]", "list secrets (names only, never values)", lsCmd},
+		"status":    {"status", "show the profile, server and lock state", statusCmd},
+		"unlock":    {"unlock", "unlock the vault", unlockCmd},
+		"lock":      {"lock", "lock the vault now", lockCmd},
+		"clients":   {"clients <add NAME [--role R] [--replace] | ls | revoke NAME>", "manage paired clients", clientsCmd},
+		"log":       {"log [--since N] [--limit N] [--json] | log verify", "read or verify the audit log", logCmd},
+		"run":       {"run [--env NAME=REF]... [--stdin REF] [--file NAME=REF]... [--reason TEXT] [--] PROGRAM [ARGS...]", "run a program with secrets it can use but you never see", runCmd},
+		"policy":    {"policy REF [--bins a,b] [--max-grant once|15m|1h]", "show or set which programs may use a secret", policyCmd},
+		"approve":   {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
+		"deny":      {"deny ID", "deny a waiting request", denyCmd},
+		"grants":    {"grants", "list live grants", grantsCmd},
+		"import":    {"import FILE [--vault NAME] [--dry-run] [--keep]", "import an Apple Passwords or Google Password Manager CSV export, then delete it", importCmd},
+		"ssh":       {"ssh [--reason TEXT] [--] SSH-ARGS...", "ssh with an asiri key that never leaves the server", sshCmd},
+		"ssh-agent": {"ssh-agent [--socket PATH]", "run an ssh agent backed by asiri (for git, rsync, …)", sshAgentCmd},
+		"pubkey":    {"pubkey REF", "print an SSH key's public key", pubkeyCmd},
+		"pending":   {"pending [--json]", "list requests waiting for approval", pendingCmd},
+		"rex":       {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
+		"revoke":    {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
+		"version":   {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}
 }
 
@@ -70,6 +83,10 @@ func main() {
 		os.Exit(exitUsage)
 	}
 	if err := c.run(ctx, os.Args[2:]); err != nil {
+		var st exitStatus
+		if errors.As(err, &st) {
+			os.Exit(int(st))
+		}
 		var ue usageError
 		if errors.As(err, &ue) || errors.Is(err, flag.ErrHelp) {
 			if !errors.Is(err, flag.ErrHelp) {
@@ -84,6 +101,10 @@ func main() {
 		} else {
 			fmt.Fprintln(os.Stderr, "asiri:", err)
 		}
+		var ee *run.ExitError
+		if errors.As(err, &ee) {
+			os.Exit(ee.Code)
+		}
 		os.Exit(exitAsiri)
 	}
 }
@@ -96,7 +117,7 @@ func usage(w io.Writer) {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		fmt.Fprintf(w, "  asiri %-8s %s\n", n, commands[n].help)
+		fmt.Fprintf(w, "  asiri %-10s %s\n", n, commands[n].help)
 	}
 	fmt.Fprint(w, "\nprofiles: --profile NAME or ASIRI_PROFILE (default owner); config in $ASIRI_HOME (~/.config/asiri)\n")
 }
