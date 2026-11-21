@@ -22,6 +22,7 @@ import (
 	"github.com/gingered-cat/asiri/internal/api"
 	"github.com/gingered-cat/asiri/internal/client"
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/importer"
 	"github.com/gingered-cat/asiri/internal/service"
 	"github.com/gingered-cat/asiri/internal/vault"
 )
@@ -516,5 +517,80 @@ func TestSSHKeys(t *testing.T) {
 	enc, _ := ssh.MarshalPrivateKeyWithPassphrase(priv, "", []byte("pw"))
 	if _, err := owner.PutItem(ctx, imp, domain.KindSSHKey, domain.NewSecret(pem.EncodeToMemory(enc))); code(err) != domain.CodeInvalid {
 		t.Fatalf("passphrase key: %v", err)
+	}
+}
+
+func TestImport(t *testing.T) {
+	e := setup(t)
+	owner := e.pair(t, "owner", domain.RoleOwner)
+	agent := e.pair(t, "claude", domain.RoleAgent)
+	csv := "Title,URL,Username,Password,Notes,OTPAuth\n" +
+		"GitHub,github.com/,octocat,pw-one,note,otpauth://totp?secret=JBSWY3DPEHPK3PXP\n" +
+		"Router,,admin,routerpw,,\n"
+	src, entries, err := importer.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := api.ImportRequest{Vault: string(src), Source: string(src), Entries: entries}
+	if _, err := agent.Import(ctx, req); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("agent import: %v", err)
+	}
+	res, err := owner.Import(ctx, req)
+	if err != nil || res != (api.ImportResult{Logins: 2, Created: 2}) {
+		t.Fatalf("first import = %+v, %v", res, err)
+	}
+	items, _ := owner.ListItems(ctx, "apple/")
+	got := map[string]domain.Kind{}
+	for _, it := range items {
+		got[it.Ref.String()] = it.Kind
+		if len(it.Policy.Bins) != 0 {
+			t.Fatalf("imported item usable by %v", it.Policy.Bins)
+		}
+	}
+	want := map[string]domain.Kind{
+		"asiri://apple/github.com/password": domain.KindLogin, "asiri://apple/github.com/username": domain.KindNote,
+		"asiri://apple/github.com/url": domain.KindNote, "asiri://apple/github.com/totp": domain.KindToken,
+		"asiri://apple/github.com/notes": domain.KindNote, "asiri://apple/router/password": domain.KindLogin,
+		"asiri://apple/router/username": domain.KindNote,
+	}
+	for ref, k := range want {
+		if got[ref] != k {
+			t.Errorf("%s: kind %q, want %q (all: %v)", ref, got[ref], k, got)
+		}
+	}
+	// The same file again changes nothing.
+	if res, err := owner.Import(ctx, req); err != nil || res != (api.ImportResult{Logins: 2, Unchanged: 2}) {
+		t.Fatalf("second import = %+v, %v", res, err)
+	}
+	// A changed password makes a new version of that field only.
+	_, entries2, _ := importer.Parse(strings.NewReader(strings.Replace(csv, "pw-one", "pw-two", 1)))
+	if res, err := owner.Import(ctx, api.ImportRequest{Vault: "apple", Source: "apple", Entries: entries2}); err != nil ||
+		res != (api.ImportResult{Logins: 2, Updated: 1, Unchanged: 1}) {
+		t.Fatalf("third import = %+v, %v", res, err)
+	}
+	items, _ = owner.ListItems(ctx, "apple/github.com/")
+	for _, it := range items {
+		if want := map[bool]int{true: 2, false: 1}[it.Ref.Field == "password"]; it.Version != want {
+			t.Errorf("%s version %d, want %d", it.Ref, it.Version, want)
+		}
+	}
+	// Using an imported login still needs a policy.
+	if _, err := agent.CreateRequest(ctx, ghRequest(domain.Ref{Vault: "apple", Name: "github.com", Field: "password"}, "/usr/bin/curl")); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("imported login without policy: %v", err)
+	}
+	evs, _ := owner.Audit(ctx, 0, 1000)
+	imports := 0
+	for _, ev := range evs {
+		if ev.Event == "import" {
+			imports++
+			for _, v := range ev.Detail {
+				if strings.Contains(v, "pw-") || strings.Contains(v, "routerpw") {
+					t.Fatalf("audit leaked a value: %+v", ev)
+				}
+			}
+		}
+	}
+	if imports != 3 {
+		t.Fatalf("%d import events", imports)
 	}
 }

@@ -58,6 +58,7 @@ func New(svc *service.Service, log *slog.Logger) *Server {
 	s.handle("POST /v1/items/{vault}/{name}/ssh-key", owner, s.generateSSHKey)
 	s.handle("GET /v1/ssh/keys", anyone, s.sshKeys)
 	s.handle("POST /v1/ssh/sign", anyone, s.sshSign)
+	s.handle("POST /v1/import", owner, s.importLogins)
 	return s
 }
 
@@ -183,7 +184,11 @@ func writeErr(w http.ResponseWriter, err error) {
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	return readJSONLimit(w, r, v, 1<<20)
+}
+
+func readJSONLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return domain.Errorf(domain.CodeInvalid, "bad request body: %v", err)
@@ -500,4 +505,18 @@ func (s *Server) sshSign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, api.SSHSignature{Format: sig.Format, Blob: sig.Blob, Rest: sig.Rest})
+}
+
+func (s *Server) importLogins(w http.ResponseWriter, r *http.Request) {
+	var req api.ImportRequest
+	if err := readJSONLimit(w, r, &req, 64<<20); err != nil {
+		writeErr(w, err)
+		return
+	}
+	res, err := s.svc.Import(r.Context(), clientFrom(r.Context()), req.Vault, req.Source, req.Entries)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }

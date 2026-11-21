@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`, and SSH keys that sign inside the server and only for the hosts you allow. Next: password import, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`, SSH keys that sign inside the server and only for the hosts you allow, and importing from Apple Passwords and Google Password Manager. Next: the MCP server and the agent skill. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -111,6 +111,23 @@ git push
 
 asiri's agent refuses: hosts not in `--ssh-hosts` (the key isn't even offered), signing anything that isn't a login to the host ssh is connected to (`ssh-keygen -Y sign`, commit signing), agent forwarding, and `ssh-add`. It needs OpenSSH 8.9 or newer, which tells the agent which host it's signing in to. An existing key can be imported with `asiri add ops/old --kind ssh_key --stdin < ~/.ssh/id_ed25519`; it must not have a passphrase, since asiri now protects it.
 
+## 07 bring your Apple or Google passwords
+
+Neither Apple Passwords nor Google Password Manager lets another app read passwords on demand, so asiri imports their export once and keeps its own encrypted copy.
+
+```sh
+# export first: the Passwords app's File menu (export to a file, not to an app),
+# or passwords.google.com → Settings → Export passwords
+asiri import ~/Downloads/Passwords.csv --dry-run      # what would be imported (names only)
+asiri import ~/Downloads/Passwords.csv                # stores it, then overwrites and deletes the file
+```
+
+The format is detected from the header (Apple: `Title,URL,Username,Password,Notes,OTPAuth`; Google: `name,url,username,password,note`). Each login becomes `asiri://apple/<site>/password`, plus `/username`, `/url`, `/totp` and `/notes` where present. A site with several accounts gets the username in its name (`github.com-octocat`). Importing the same export again changes nothing; a changed password becomes a new version.
+
+Imported logins can't be used by anything until you allow a program: `asiri policy apple/github.com/password --bins psql`.
+
+After importing, asiri overwrites and deletes the file, and tells you if it sat in a folder that iCloud Drive, Dropbox, Google Drive or OneDrive syncs (remove it there too), or if Time Machine may have backed it up. On SSDs and APFS, deleted data can linger until the space is reused: FileVault is what protects it. `--keep` keeps the file.
+
 ## give an agent its own profile
 
 ```sh
@@ -126,6 +143,7 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 | `asiri approve [ID] [--for 15m]` / `asiri deny ID` / `asiri pending` | answer waiting requests / list them |
 | `asiri rex install` / `uninstall` / `status` | approvals in Rex's command palette |
 | `asiri ssh ARGS` / `asiri ssh-agent` / `asiri pubkey REF` | ssh with an asiri key / an agent socket / the public key |
+| `asiri import FILE [--dry-run] [--keep] [--vault V]` | import an Apple Passwords or Google Password Manager export |
 | `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |
