@@ -78,8 +78,11 @@
 <p>Approve an agent's request without leaving your workspace. asiri integrates with the command palette in <a href="https://www.superlogical.com/rex">Rex</a>.</p>
 <h2 id="install-the-integration">install the integration</h2>
 <p>First finish <a href="/docs/getting-started/">getting started</a>. You need a paired owner profile, a built asiri binary at a stable path, and the Rex CLI on PATH.</p>
-<pre><code class="language-sh">asiri rex install
+<pre><code class="language-sh">curl -fsSL https://asiri.run/install.sh | sh
 asiri rex status
+</code></pre>
+<p>The script installs the release binary and then runs <code>asiri rex install</code> when Rex and an owner profile are already present. If either is missing, run the plugin step yourself after pairing:</p>
+<pre><code class="language-sh">asiri rex install
 </code></pre>
 <p>The installer adds asiri's marked block to Rex's <code>init.lua</code>. It runs <code>rex config check</code> and restores the previous configuration if validation fails. It reloads Rex when possible. If Rex is not running, start it to load the integration.</p>
 <p>Do not install from <code>go run ./cmd/asiri</code>. That binary lives in a temporary directory. Use the binary built by <code>go run ./dev bin</code>.</p>
@@ -268,6 +271,9 @@ asiri deny ID
         
       
         <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#install-and-update">cli usage / install and update</a>
         
       
         <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>

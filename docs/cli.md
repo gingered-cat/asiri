@@ -109,6 +109,16 @@ asiri log verify
 
 The audit log is hash-chained. Verification checks its chain, not whether every action was a good decision. Only an owner can read it.
 
+## install and update
+
+```sh
+curl -fsSL https://asiri.run/install.sh | sh   # first install: latest release, checksum-verified
+asiri update --check                           # is a newer release out?
+asiri update                                   # replace this binary with it
+```
+
+`asiri update` downloads the release for your OS and chip, checks it against the release's `checksums.txt`, and swaps it in place of the running binary. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with `docker compose -f deploy/compose.yaml pull` and `up -d`. A development build refuses to replace itself unless you pass `--force`; so does an older `--version`. `v0.1.0` predates `asiri update`, so run the install script once to get it.
+
 ## exit codes
 
 | code | meaning |

@@ -107,3 +107,17 @@ func TestInstallWithoutConfig(t *testing.T) {
 		t.Fatal("config left behind after rejected install")
 	}
 }
+
+func TestInstalledWith(t *testing.T) {
+	config := filepath.Join(t.TempDir(), "rex", "init.lua")
+	t.Setenv("REX_CONFIG", config)
+	if _, _, ok := InstalledWith(); ok {
+		t.Fatal("reported installed with no config")
+	}
+	os.MkdirAll(filepath.Dir(config), 0o755)
+	os.WriteFile(config, []byte("-- mine\n\n"+Block("/p/init.lua", `/Users/a "b"/asiri`, "personal")), 0o644)
+	bin, profile, ok := InstalledWith()
+	if !ok || bin != `/Users/a "b"/asiri` || profile != "personal" {
+		t.Fatalf("got %q %q %v", bin, profile, ok)
+	}
+}
