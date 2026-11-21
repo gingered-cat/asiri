@@ -54,16 +54,6 @@ function decode(el, to, { from = el.textContent, stagger = 26, spin = 160 } = {}
   el._decode = requestAnimationFrame(step);
 }
 
-// Deterministic randomness, so the star layout is the same on every visit.
-function seeded(seed) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 // ---- copy prompt ----
 const copy = document.getElementById("copy");
 copy.addEventListener("click", async () => {
@@ -76,26 +66,86 @@ copy.addEventListener("click", async () => {
 });
 
 // ---- the demo: one request, the lock opens for one grant, then closes ----
+// The shackle is its own layer that slides behind the body, so it can travel
+// on a spring instead of swapping drawings. Storyboard, after Kit Langton's
+// explainer-motion rules: quiet hold → waiting (keyhole spinner) → anticipation
+// (a 2 px dip) → spring up with one small overshoot → hold → a quicker, stiffer
+// drop → contact (a 1.5 px jolt) → quiet.
 const lock = document.getElementById("lock");
-const SHACKLE = {
-  closed: ["             ", "    ╭───╮    ", "    │   │    ", "  ┌─┴───┴─┐  "],
-  lifted: ["    ╭───╮    ", "    │   │    ", "    │   │    ", "  ┌─┴───┴─┐  "],
-  open:   ["    ╭───╮    ", "    │   │    ", "    │   ╵    ", "  ┌─┴─────┐  "],
-};
-function drawLock(state) {
-  lock.innerHTML = [
-    ...SHACKLE[state],
+lock.innerHTML = [
+  '<span class="shackle">' + ["    ╭───╮    ", "    │   │    ", "    │   ╵    "].join("\n") + "</span>",
+  '<span class="lock-body">' + [
+    '  ┌─┴───<span class="latch">┴</span>─┐  ',
     '  │   <span class="k">•</span>   │  ',
     '  │   <span class="k">┃</span>   │  ',
     "  └───────┘  ",
-  ].join("\n");
+  ].join("\n") + "</span>",
+].join("");
+const shackle = lock.querySelector(".shackle");
+const body = lock.querySelector(".lock-body");
+const latch = lock.querySelector(".latch");
+const keyhole = lock.querySelector(".k");
+const lineHeight = () => parseFloat(getComputedStyle(lock).lineHeight);
+const lockState = { y: null }; // shackle offset in px; closed = one line down
+const setShackle = (y) => { lockState.y = y; shackle.style.transform = `translateY(${y}px)`; };
+setShackle(lineHeight());
+
+// Sample a damped spring from 0 to 1 at 60 fps (mass 1). Returns positions.
+function spring(stiffness, damping) {
+  const out = [];
+  let x = 0, v = 0;
+  for (let f = 0; f < 120; f++) {
+    for (let i = 0; i < 8; i++) { const a = stiffness * (1 - x) - damping * v; v += a / 480; x += v / 480; }
+    out.push(x);
+    if (Math.abs(1 - x) < 0.002 && Math.abs(v) < 0.02) break;
+  }
+  out[out.length - 1] = 1;
+  return out;
 }
+const OPEN = spring(260, 16);  // damping ratio ≈ 0.5: one visible overshoot
+const CLOSE = spring(520, 42); // ≈ 0.92: quick, no bounce (exits are quicker)
+
+function travel(to, curve) {
+  const from = lockState.y;
+  const frames = [{ transform: `translateY(${from}px)` }, ...curve.map((p) => ({ transform: `translateY(${from + (to - from) * p}px)` }))];
+  setShackle(to);
+  return shackle.animate(frames, { duration: curve.length * (1000 / 60), easing: "linear" });
+}
+
+const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+let spinTimer = 0;
+function spinKeyhole() {
+  let i = 0;
+  clearInterval(spinTimer);
+  spinTimer = setInterval(() => { keyhole.textContent = SPIN[i++ % SPIN.length]; }, 1000 / 12);
+}
+function settleKeyhole() { clearInterval(spinTimer); keyhole.textContent = "•"; }
+
+function openLock() {
+  const closed = lineHeight();
+  // anticipation: pressed down a touch before it gives
+  shackle.animate([{ transform: `translateY(${closed}px)` }, { transform: `translateY(${closed + 2}px)` }, { transform: `translateY(${closed}px)` }],
+    { duration: 120, easing: "cubic-bezier(0.45, 0, 0.55, 1)" }).finished.then(() => {
+    travel(0, OPEN);
+    setTimeout(() => { latch.textContent = "─"; }, 40); // the right leg comes free
+  }, () => {});
+}
+function closeLock() {
+  const anim = travel(lineHeight(), CLOSE);
+  // contact: the moment the shackle seats, the latch catches and the body takes the hit
+  const seat = CLOSE.findIndex((p) => p > 0.96) * (1000 / 60);
+  setTimeout(() => {
+    latch.textContent = "┴";
+    body.animate([{ transform: "none" }, { transform: "translateY(1.5px)" }, { transform: "none" }], { duration: 140, easing: "ease-out" });
+  }, seat);
+  return anim;
+}
+
 // The one red event: instant attack, long decay (the CSS transition only runs on the way out).
 function flash(el, ms = 120) {
   el.classList.add("lit");
   setTimeout(() => el.classList.remove("lit"), ms);
 }
-drawLock("closed");
 
 const lines = [...document.querySelectorAll("#log li")];
 const scrubbed = document.getElementById("scrubbed");
@@ -106,13 +156,10 @@ if (!reduced) {
   const show = (i) => lines[i].classList.add("shown");
   const events = [
     [300, () => show(0)],
-    [1200, () => show(1)],
-    [2300, () => { show(2); flash(lines[2]); }],
-    [2450, () => drawLock("lifted")],
-    [2540, () => { drawLock("open"); flash(lock); }],
+    [1200, () => { show(1); spinKeyhole(); }], // waiting for you
+    [2300, () => { show(2); flash(lines[2]); settleKeyhole(); flash(lock); openLock(); }],
     [3300, () => show(3)],
-    [4100, () => drawLock("lifted")], // closing is quicker than opening
-    [4160, () => drawLock("closed")],
+    [4100, () => closeLock()],
     [4700, () => {
       scrubbed.textContent = fakeSecret();
       show(4);
@@ -128,7 +175,7 @@ if (!reduced) {
     while (next < events.length && events[next][0] <= at) events[next++][1]();
     if (at >= PERIOD) { lap++; next = 0; }
   });
-  whenVisible(lock, demo.start, demo.stop);
+  whenVisible(lock, demo.start, () => { demo.stop(); if (spinTimer) settleKeyhole(); });
 }
 
 // ---- star count beside github in the navbar ----
