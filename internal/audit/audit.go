@@ -34,6 +34,7 @@ const (
 	Expired      = "request_expired"
 	Redeem       = "redeem"
 	SSHSign      = "ssh_sign"
+	Import       = "import"
 	GrantRevoke  = "grant_revoke"
 	RevokeAll    = "revoke_all"
 	ScrubHit     = "scrub_hit"

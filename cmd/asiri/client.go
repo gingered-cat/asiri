@@ -349,7 +349,7 @@ func logCmd(ctx context.Context, args []string) error {
 			who = "server"
 		}
 		var detail []string
-		for _, k := range []string{"ref", "bin", "decision", "method", "asked", "hits", "code", "version", "kind", "name", "role", "mode", "bins", "max_grant", "reason", "grants", "requests"} {
+		for _, k := range []string{"ref", "bin", "decision", "method", "asked", "hits", "code", "version", "kind", "name", "role", "mode", "bins", "max_grant", "reason", "grants", "requests", "source", "vault", "logins", "created", "updated", "unchanged"} {
 			if v, ok := ev.Detail[k]; ok {
 				detail = append(detail, k+"="+v)
 			}

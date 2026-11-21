@@ -305,3 +305,9 @@ func (c *Client) RevokeAll(ctx context.Context) (int, error) {
 	var r api.RevokeAllResponse
 	return r.Revoked, c.do(ctx, "POST", "/v1/revoke-all", struct{}{}, &r)
 }
+
+// Import sends parsed logins. The request body holds the values.
+func (c *Client) Import(ctx context.Context, req api.ImportRequest) (api.ImportResult, error) {
+	var r api.ImportResult
+	return r, c.do(ctx, "POST", "/v1/import", req, &r)
+}

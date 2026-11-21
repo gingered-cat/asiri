@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/importer"
 )
 
 // DefaultPort is where the server listens.
@@ -144,6 +145,20 @@ type SSHSignature struct {
 	Format string `json:"format"`
 	Blob   []byte `json:"blob"`
 	Rest   []byte `json:"rest,omitempty"`
+}
+
+// ImportRequest carries logins parsed from an export.
+type ImportRequest struct {
+	Vault   string           `json:"vault"`
+	Source  string           `json:"source"`
+	Entries []importer.Entry `json:"entries"`
+}
+
+type ImportResult struct {
+	Logins    int `json:"logins"`
+	Created   int `json:"created"`
+	Updated   int `json:"updated"`
+	Unchanged int `json:"unchanged"`
 }
 
 type ErrorBody struct {

@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1–M4 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`, SSH keys that sign inside the server); M5+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: M1–M5 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`, SSH keys that sign inside the server, Apple/Google CSV import); M6+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -308,7 +308,7 @@ HTTPS, TLS 1.3 only, client certificate required (except `/v1/pair`). JSON. Erro
 | GET | `/v1/items?q=` | agent | metadata and policy, never values |
 | PUT | `/v1/items/{vault}/{name}` | owner | new version; value in body |
 | PUT | `/v1/items/{vault}/{name}/policy` | owner | bins, ssh_hosts, max_grant, reveal_to_agent |
-| POST | `/v1/import/{apple\|google}` | owner | CSV body, streamed |
+| POST | `/v1/import` | owner | parsed logins as JSON (the CLI parses the CSV); one transaction; up to 64 MiB |
 | POST | `/v1/requests` | agent | `Idempotency-Key` header; returns 200 grant / 202 pending / 403 rejected |
 | GET | `/v1/requests/{id}?wait=30s` | agent | long poll |
 | POST | `/v1/requests/{id}/decision` | owner | first decision wins; agents can never decide, not even their own requests |
