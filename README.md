@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`, SSH keys that sign inside the server and only for the hosts you allow, importing from Apple Passwords and Google Password Manager, and an MCP server plus an agent skill. Next: the v0.1 release. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1.0.** Encrypted vault, pairing, `asiri run`, Rex approvals, host-bound SSH keys, Apple and Google CSV import, and an MCP server with an agent skill. Binaries and the container image are published from the `v0.1.0` tag. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
