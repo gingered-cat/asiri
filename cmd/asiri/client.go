@@ -55,6 +55,8 @@ func addCmd(ctx context.Context, args []string) error {
 	profile := profileFlag(fs)
 	kind := fs.String("kind", "", "token, password, ssh_key, login or note (default: token, or the existing kind)")
 	stdin := fs.Bool("stdin", false, "read the value from stdin instead of the terminal")
+	bins := fs.String("bins", "", "comma-separated programs that may receive it (same as asiri policy --bins)")
+	maxGrant := fs.String("max-grant", "", "longest approval allowed: once, 15m or 1h")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -89,6 +91,20 @@ func addCmd(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("stored %s (%s, version %d)\n", it.Ref, it.Kind, it.Version)
+	if *bins != "" || *maxGrant != "" {
+		b := it.Policy.Bins
+		if *bins != "" {
+			b = splitList(*bins)
+		}
+		if it, err = c.SetPolicy(ctx, ref, b, *maxGrant); err != nil {
+			return err
+		}
+	}
+	if len(it.Policy.Bins) == 0 {
+		fmt.Printf("no program may use it yet; allow one with: asiri policy %s --bins gh\n", it.Ref)
+	} else {
+		fmt.Printf("may be used by %s\n", strings.Join(it.Policy.Bins, ", "))
+	}
 	return nil
 }
 
@@ -116,9 +132,13 @@ func lsCmd(ctx context.Context, args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "REF\tKIND\tVER\tUPDATED")
+	fmt.Fprintln(tw, "REF\tKIND\tVER\tPROGRAMS\tUPDATED")
 	for _, it := range items {
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", it.Ref, it.Kind, it.Version, it.UpdatedAt.Local().Format("2006-01-02 15:04"))
+		bins := strings.Join(it.Policy.Bins, ",")
+		if bins == "" {
+			bins = "-"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", it.Ref, it.Kind, it.Version, bins, it.UpdatedAt.Local().Format("2006-01-02 15:04"))
 	}
 	return tw.Flush()
 }
@@ -296,7 +316,7 @@ func logCmd(ctx context.Context, args []string) error {
 			who = "server"
 		}
 		var detail []string
-		for _, k := range []string{"ref", "version", "kind", "name", "role", "mode"} {
+		for _, k := range []string{"ref", "bin", "decision", "method", "asked", "hits", "code", "version", "kind", "name", "role", "mode", "bins", "max_grant", "reason", "grants", "requests"} {
 			if v, ok := ev.Detail[k]; ok {
 				detail = append(detail, k+"="+v)
 			}

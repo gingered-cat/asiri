@@ -205,6 +205,7 @@ func serverRun(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	o.svc.Start(ctx) // expires requests nobody answered
 	hs := server.New(o.svc, log).HTTPServer(*listen, tc)
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {

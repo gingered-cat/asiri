@@ -78,6 +78,56 @@ type VerifyResponse struct {
 	Rows int64 `json:"rows"`
 }
 
+type CreateRequest struct {
+	Ref       domain.Ref `json:"ref"`
+	BinPath   string     `json:"bin_path"`
+	BinSHA256 string     `json:"bin_sha256"`
+	Argv      []string   `json:"argv"`
+	Cwd       string     `json:"cwd"`
+	Reason    string     `json:"reason"`
+}
+
+// RequestResponse is a request's state. Reused means a live grant for the
+// same client, item and binary already covered it.
+type RequestResponse struct {
+	Request domain.Request `json:"request"`
+	Reused  bool           `json:"reused,omitempty"`
+}
+
+type RequestsResponse struct {
+	Requests []domain.Request `json:"requests"`
+}
+
+type DecisionRequest struct {
+	Decision domain.Decision `json:"decision"`
+	Method   domain.Method   `json:"method"`
+}
+
+// RedeemResponse carries a value. Value is base64 in JSON.
+type RedeemResponse struct {
+	Grant domain.Grant `json:"grant"`
+	Value []byte       `json:"value"`
+}
+
+type GrantsResponse struct {
+	Grants []domain.Grant `json:"grants"`
+}
+
+type RevokeAllResponse struct {
+	Revoked int `json:"revoked"`
+}
+
+type ScrubReport struct {
+	Hits int `json:"hits"`
+}
+
+type PolicyRequest struct {
+	Field    string   `json:"field,omitempty"`
+	Bins     []string `json:"bins"`
+	SSHHosts []string `json:"ssh_hosts,omitempty"`
+	MaxGrant string   `json:"max_grant,omitempty"`
+}
+
 type ErrorBody struct {
 	Error struct {
 		Code    domain.Code `json:"code"`
@@ -92,8 +142,10 @@ func Status(c domain.Code) int {
 		return http.StatusBadRequest
 	case domain.CodeUnauthenticated:
 		return http.StatusUnauthorized
-	case domain.CodeNotAllowed:
+	case domain.CodeNotAllowed, domain.CodeInterpreter, domain.CodeDenied:
 		return http.StatusForbidden
+	case domain.CodeExpired, domain.CodeSpent, domain.CodeRevoked:
+		return http.StatusGone
 	case domain.CodeNotFound:
 		return http.StatusNotFound
 	case domain.CodeConflict:

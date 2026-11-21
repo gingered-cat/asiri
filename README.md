@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Milestone 1 works: an encrypted vault in a container, pairing over mTLS, `asiri add`, `asiri ls`, lock/unlock, and a tamper-evident audit log. `asiri run`, Rex approvals, SSH and the MCP server come next. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, and `asiri run` with approvals in the terminal, an allow-list of programs, and secrets scrubbed from output. Next: Rex approvals, SSH, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -38,6 +38,39 @@ gh auth token | asiri add dev/github --stdin
 asiri ls                             # names, kinds, versions; never values
 ```
 
+## 04 let a program use it
+
+```sh
+asiri policy dev/github --bins gh --max-grant 1h     # only gh may receive it
+asiri run --env GH_TOKEN=asiri://dev/github --reason "open the PR" -- gh pr create --fill
+```
+
+You're asked once (Return = once, `f` = 15 min, `h` = 1 hour, `d` = deny). Within a 15 min or 1 h grant, the same program runs again without asking.
+
+When an agent runs it (no terminal), it waits and prints the command to approve it in yours:
+
+```text
+asiri: claude wants asiri://dev/github
+asiri:   gh pr create --fill · ~/proj/api · "open the PR"
+asiri: waiting for approval (until 17:07:42). in your terminal, run:
+
+  asiri approve 01M7WV9QAXVYMTM68PR5WQA8SW
+```
+
+| delivery | how | note |
+|---|---|---|
+| `--stdin REF` | written to the program's stdin | best when the program reads it (`docker login --password-stdin`) |
+| `--file NAME=REF` | a one-time pipe; `NAME` is its path | never on disk; readable once |
+| `--env NAME=REF` | an environment variable | easiest; other processes running as you can read it (`ps eww`) while it runs |
+
+What asiri won't do:
+
+- give a secret to a shell, interpreter or wrapper (`sh`, `python`, `node`, `env`, `xargs`, `sudo`, ...): they could print or send it anywhere. Exit `126`.
+- give it to a program not in the item's `--bins`. Exit `126`.
+- let the value reach you or the agent in the output: it, and its base64, hex and URL forms, become `[asiri:asiri://dev/github]`, and the audit log records a `scrub_hit`.
+
+Scrubbing is a safety net, not the defence: an allowed program with its own way to send data out (`gh gist create`) can still do that. Pick `--bins` with that in mind.
+
 ## give an agent its own profile
 
 ```sh
@@ -50,12 +83,14 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 
 | command | does |
 |---|---|
+| `asiri approve [ID] [--for 15m]` / `asiri deny ID` | answer waiting requests |
+| `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |
 | `asiri log` / `asiri log verify` | read the audit log / check its hash chain |
 | `asiri server init/run/keygen/pair-code/health` | server side, usually inside the container |
 
-Exit codes: `125` asiri failed, `2` usage; `126`/`127` are kept for `asiri run`.
+Exit codes, as in `docker run`: `125` asiri failed, `126` refused, denied or expired, `127` program not found, `2` usage; otherwise `asiri run` exits with the program's own code.
 
 ## how it's built
 

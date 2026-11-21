@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1 built (vault, server, pairing, `add`, `ls`, audit); M2+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: M1 and M2 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, terminal and wait approvals, scrubbing); M3+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -258,7 +258,7 @@ CREATE TABLE policies  (item_id TEXT PRIMARY KEY,             -- per item, survi
 CREATE TABLE clients   (id TEXT PRIMARY KEY, name TEXT UNIQUE, role TEXT, cert_fp TEXT UNIQUE,
                         created_at INT, revoked_at INT);
 CREATE TABLE pair_codes (hash BLOB PRIMARY KEY, name TEXT, role TEXT, expires_at INT, used_at INT);
--- M2 (002_grants.sql)
+-- M2 (002_grants.sql): requests and grants also store ref, argv, decision and method for display
 CREATE TABLE requests  (id TEXT PRIMARY KEY, client_id TEXT, item_id TEXT, bin_path TEXT,
                         bin_sha256 TEXT, host_fp TEXT, argv_preview TEXT, cwd TEXT, reason TEXT,
                         status TEXT, created_at INT, decided_at INT);
@@ -268,7 +268,7 @@ CREATE TABLE grants    (id TEXT PRIMARY KEY, request_id TEXT UNIQUE, client_id T
                         uses_left INT, expires_at INT, revoked_at INT);
 CREATE INDEX grants_reuse ON grants(client_id, item_id, bin_sha256, expires_at);
 CREATE TABLE audit     (seq INTEGER PRIMARY KEY, ts INT, client_id TEXT, event TEXT,
-                        item_id TEXT, detail TEXT, prev_hash BLOB, hash BLOB);  -- M2 adds grant_id
+                        item_id TEXT, detail TEXT, prev_hash BLOB, hash BLOB);  -- request/grant ids go in detail
 ```
 - IDs are ULIDs (sortable, no coordination).
 - Database files are created 0600; WAL and SHM files inherit it.
@@ -550,9 +550,11 @@ Lock order: never hold the broker or limiter mutex while in a DB transaction. Pu
 - `SSHAgent` serves each socket connection in its own goroutine; per-connection state (the bound host key) lives in that goroutine only.
 
 ### Scrubber detail
-- Aho–Corasick automaton built once per run from all values and their forms.
-- Keeps a tail of `maxPatternLen-1` bytes between writes so a match split across two reads is still caught; `Flush` on child exit.
-- Fuzz test: random values, random encodings, random chunk boundaries; no raw form ever reaches the output.
+- Patterns: each value as raw, base64 (std, raw std, url, raw url), hex (lower, upper), query- and path-escaped. Values under 4 bytes aren't scrubbed (they would match ordinary output).
+- Finds every match with `bytes.Index` (SIMD; ~750 MB/s on an M-series Mac with two values, so no Aho–Corasick needed), then **merges overlapping matches** and replaces each group with its labels. Without merging, base64 padding of one value could swallow the first byte of the next and leak the rest; a fuzz case found this.
+- Holds back the last `maxPatternLen-1` bytes between writes, and never commits a group that a later write could still extend; `Flush` on child exit.
+- Fuzz test: 8 seeds × 500 cases of random values, encodings and chunk boundaries; no form of any value may survive, and other output must pass unchanged.
+- The child's stdout and stderr are pipes, not a terminal, so programs may drop colours or refuse interactive prompts. A pty mode is a later option.
 
 ---
 

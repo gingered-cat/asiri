@@ -169,31 +169,40 @@ func (v *Vault) PutTx(ctx context.Context, tx *sql.Tx, ref domain.Ref, kind doma
 
 // Get returns the latest version of ref and its value.
 func (v *Vault) Get(ctx context.Context, ref domain.Ref) (domain.Item, domain.Secret, error) {
+	return v.get(ctx, `vault = ? AND name = ? AND field = ?`, ref.Vault, ref.Name, ref.Field)
+}
+
+// GetByID returns the latest version of the item with id and its value.
+func (v *Vault) GetByID(ctx context.Context, id domain.ItemID) (domain.Item, domain.Secret, error) {
+	return v.get(ctx, `id = ?`, string(id))
+}
+
+func (v *Vault) get(ctx context.Context, where string, args ...any) (domain.Item, domain.Secret, error) {
 	var (
-		id, kind                string
-		ver                     int
+		it                      domain.Item
 		created                 int64
 		ct, nonce, wdek, dnonce []byte
 	)
 	err := v.store.R().QueryRowContext(ctx,
-		`SELECT id, version, kind, created_at, ciphertext, nonce, wrapped_dek, dek_nonce FROM items
-		 WHERE vault = ? AND name = ? AND field = ? AND deleted_at IS NULL
-		 ORDER BY version DESC LIMIT 1`, ref.Vault, ref.Name, ref.Field).
-		Scan(&id, &ver, &kind, &created, &ct, &nonce, &wdek, &dnonce)
+		`SELECT id, version, vault, name, field, kind, created_at, ciphertext, nonce, wrapped_dek, dek_nonce FROM items
+		 WHERE `+where+` AND deleted_at IS NULL ORDER BY version DESC LIMIT 1`, args...).
+		Scan(&it.ID, &it.Version, &it.Ref.Vault, &it.Ref.Name, &it.Ref.Field, &it.Kind, &created, &ct, &nonce, &wdek, &dnonce)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Item{}, domain.Secret{}, domain.Errorf(domain.CodeNotFound, "%s does not exist", ref)
+		return domain.Item{}, domain.Secret{}, domain.Errorf(domain.CodeNotFound, "that secret does not exist")
 	}
 	if err != nil {
 		return domain.Item{}, domain.Secret{}, err
 	}
+	it.UpdatedAt = time.UnixMilli(created).UTC()
+	id := string(it.ID)
 	var value []byte
 	err = v.kr.with(func(vk []byte) error {
-		dek, err := openAEAD(vk, dnonce, wdek, dekAAD(id, ver))
+		dek, err := openAEAD(vk, dnonce, wdek, dekAAD(id, it.Version))
 		if err != nil {
 			return errors.New("item key failed to decrypt: the database was altered or is corrupt")
 		}
 		defer clear(dek)
-		value, err = openAEAD(dek, nonce, ct, itemAAD(id, ver, ref.Field))
+		value, err = openAEAD(dek, nonce, ct, itemAAD(id, it.Version, it.Ref.Field))
 		if err != nil {
 			return errors.New("item failed to decrypt: the database was altered or is corrupt")
 		}
@@ -202,13 +211,49 @@ func (v *Vault) Get(ctx context.Context, ref domain.Ref) (domain.Item, domain.Se
 	if err != nil {
 		return domain.Item{}, domain.Secret{}, err
 	}
-	item := domain.Item{ID: domain.ItemID(id), Ref: ref, Kind: domain.Kind(kind), Version: ver,
-		UpdatedAt: time.UnixMilli(created).UTC()}
-	return item, domain.NewSecret(value), nil
+	return it, domain.NewSecret(value), nil
+}
+
+// Lookup returns the latest version of ref with its policy, without decrypting.
+func (v *Vault) Lookup(ctx context.Context, ref domain.Ref) (domain.Item, error) {
+	items, err := v.list(ctx, `i.vault = ? AND i.name = ? AND i.field = ?`, ref.Vault, ref.Name, ref.Field)
+	if err != nil {
+		return domain.Item{}, err
+	}
+	if len(items) == 0 {
+		return domain.Item{}, domain.Errorf(domain.CodeNotFound, "%s does not exist; add it with: asiri add %s", ref, ref)
+	}
+	return items[0], nil
+}
+
+// SetPolicyTx replaces an item's policy.
+func (v *Vault) SetPolicyTx(ctx context.Context, tx *sql.Tx, id domain.ItemID, p domain.Policy) error {
+	bins, _ := json.Marshal(nonNil(p.Bins))
+	hosts, _ := json.Marshal(nonNil(p.SSHHosts))
+	reveal := 0
+	if p.RevealToAgent {
+		reveal = 1
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO policies (item_id, bins, ssh_hosts, max_grant, reveal_to_agent)
+		VALUES (?, ?, ?, ?, ?) ON CONFLICT (item_id) DO UPDATE SET bins = excluded.bins,
+		ssh_hosts = excluded.ssh_hosts, max_grant = excluded.max_grant, reveal_to_agent = excluded.reveal_to_agent`,
+		id, string(bins), string(hosts), p.MaxGrant, reveal)
+	return err
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // List returns the latest version of every item whose ref contains query.
 func (v *Vault) List(ctx context.Context, query string) ([]domain.Item, error) {
+	return v.list(ctx, `(?1 = '' OR instr(lower(i.vault || '/' || i.name || '/' || i.field), lower(?1)) > 0)`, query)
+}
+
+func (v *Vault) list(ctx context.Context, where string, args ...any) ([]domain.Item, error) {
 	rows, err := v.store.R().QueryContext(ctx, `
 		SELECT i.id, i.vault, i.name, i.field, i.kind, i.version, i.created_at,
 		       COALESCE(p.bins, '[]'), COALESCE(p.ssh_hosts, '[]'), COALESCE(p.max_grant, '1h'),
@@ -216,9 +261,8 @@ func (v *Vault) List(ctx context.Context, query string) ([]domain.Item, error) {
 		FROM items i
 		JOIN (SELECT id, MAX(version) AS v FROM items GROUP BY id) l ON l.id = i.id AND l.v = i.version
 		LEFT JOIN policies p ON p.item_id = i.id
-		WHERE i.deleted_at IS NULL
-		  AND (?1 = '' OR instr(lower(i.vault || '/' || i.name || '/' || i.field), lower(?1)) > 0)
-		ORDER BY i.vault, i.name, i.field`, query)
+		WHERE i.deleted_at IS NULL AND `+where+`
+		ORDER BY i.vault, i.name, i.field`, args...)
 	if err != nil {
 		return nil, err
 	}

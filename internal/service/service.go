@@ -33,6 +33,8 @@ type Config struct {
 	Now     func() time.Time // defaults to time.Now
 	// FailDelay slows down wrong passphrases and pairing codes. Defaults to 1s.
 	FailDelay time.Duration
+	// Per-client request rate limit. Defaults to 30 a minute, bursts of 10.
+	RequestsPerMinute, RequestBurst int
 }
 
 type Service struct {
@@ -42,6 +44,9 @@ type Service struct {
 	keyFile   string
 	now       func() time.Time
 	failDelay time.Duration
+	rules     []Rule
+	limit     *limiter
+	broker    broker
 }
 
 func New(c Config) *Service {
@@ -51,7 +56,11 @@ func New(c Config) *Service {
 	if c.FailDelay == 0 {
 		c.FailDelay = time.Second
 	}
-	return &Service{store: c.Store, vault: c.Vault, ca: c.CA, keyFile: c.KeyFile, now: c.Now, failDelay: c.FailDelay}
+	if c.RequestsPerMinute == 0 {
+		c.RequestsPerMinute, c.RequestBurst = 30, 10
+	}
+	return &Service{store: c.Store, vault: c.Vault, ca: c.CA, keyFile: c.KeyFile, now: c.Now, failDelay: c.FailDelay,
+		rules: defaultRules(), limit: newLimiter(c.RequestsPerMinute, c.RequestBurst)}
 }
 
 func (s *Service) fail() { time.Sleep(s.failDelay) }
