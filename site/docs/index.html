@@ -1,0 +1,260 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ethos · asiri docs</title>
+  <meta name="description" content="Dedicated to a way of working where humans keep their agency and agents can do useful work. Neither needs to pretend to be the other.">
+  <link rel="canonical" href="https://asiri.run/docs/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/docs/docs.v2.css">
+  <link rel="alternate" type="text/markdown" href="/docs/ethos.md" title="ethos as Markdown">
+  <script src="/docs/docs.js" type="module"></script>
+</head>
+<body class="docs" data-page="ethos">
+  <a class="skip" href="#content">skip to content</a>
+  <header class="docs-header">
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <a class="docs-label" href="/docs/">field guide</a>
+    <nav aria-label="Site"><a href="/">home</a><a href="https://github.com/gingered-cat/asiri">github ↗</a></nav>
+  </header>
+
+  <div class="docs-layout">
+    <nav class="docs-nav tree" aria-label="Documentation">
+      <details class="nav-root" open>
+        <summary><span class="chevron" aria-hidden="true">›</span> documentation <span class="count">06</span></summary>
+        <div class="nav-groups">
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> begin</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/" data-doc-link data-key="e" aria-current="page">ethos</a></li>
+            
+              <li><a href="/docs/getting-started/" data-doc-link data-key="s" >getting started</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> use</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/rex/" data-doc-link data-key="r" >rex support</a></li>
+            
+              <li><a href="/docs/cli/" data-doc-link data-key="c" >cli usage</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> operate</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/self-hosting/" data-doc-link data-key="h" >self-hosting</a></li>
+            
+              <li><a href="/docs/setups/" data-doc-link data-key="u" >setups</a></li>
+            
+            </ul>
+          </details>
+        
+        </div>
+      </details>
+      <p class="nav-note">your secrets.<br>your permission.</p>
+      <a class="skill-link" href="/skill.md">agent skill ↗</a>
+    </nav>
+
+    <main id="content" tabindex="-1">
+      <div class="page-meta"><span>begin / ethos</span><span>asiri:smol</span></div>
+      <div class="page-actions">
+        <button type="button" id="copy-page" hidden>copy page as markdown <span aria-hidden="true">↗</span></button>
+        <a id="markdown-source" href="/docs/ethos.md">raw .md</a>
+      </div>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+      <article class="prose"><h1 id="human--agent-in-harmony">human + agent, in harmony</h1>
+<p>Dedicated to a way of working where humans keep their agency and agents can do useful work. Neither needs to pretend to be the other.</p>
+<p><em>Àṣírí</em> is Yoruba for “secret.” The name describes what stays yours, even when an agent helps you use it.</p>
+<h2 id="collaboration-with-boundaries">collaboration, with boundaries</h2>
+<p>An agent can open a pull request without knowing your GitHub token. It can connect to a server without holding your private key. Useful access does not require unrestricted access.</p>
+<p>asiri separates the work from the credential. The agent names a secret and explains the task. You decide whether the program receives it.</p>
+<h3 id="the-human-decides">the human decides</h3>
+<p>Approval belongs to you. You can allow one use, grant a short window, or say no. An agent profile cannot approve its own request. A denial is a decision, not a puzzle for the agent to solve.</p>
+<h3 id="the-agent-does-the-work">the agent does the work</h3>
+<p>The agent receives the program's result, not a tool for reading the vault. Secret references such as <code>asiri://dev/github</code> give people and agents a shared vocabulary without putting values in the conversation.</p>
+<h2 id="consent-stays-visible">consent stays visible</h2>
+<p>The approval shows the program, arguments, working directory, and reason. <a href="/docs/rex/">Rex</a> brings that decision into your workspace. A terminal approval works without Rex.</p>
+<p>A grant is temporary permission. You can inspect grants, revoke them, or lock the vault. The audit log records decisions and changes so that you can review what happened.</p>
+<h2 id="trust-has-limits">trust has limits</h2>
+<p>asiri is not a sandbox for arbitrary programs. An allowed program can use a credential to send data elsewhere. Output scrubbing catches known representations of a secret, not every possible transformation.</p>
+<p>Environment variables can be visible to other processes running as your user. A compromised host, an owner profile in the wrong hands, or an overly broad allow-list breaks the intended boundary.</p>
+<p>Choose programs deliberately. Keep owner credentials away from agents. Treat scrubbing as a safety net, not proof that an untrusted program is safe.</p>
+<h2 id="start-with-one-useful-task">start with one useful task</h2>
+<p>Start small: one secret, one allowed program, one approval. Understand the boundary before you widen it.</p>
+<p><a href="/docs/getting-started/">Get started</a> with a local vault, then give your agent its own profile. The aim is less friction without less consent.</p>
+</article>
+      <nav class="page-turn" aria-label="Adjacent pages">
+        <span></span>
+        <a href="/docs/getting-started/"><span>next →</span>getting started</a>
+      </nav>
+      <footer class="docs-footer"><span>made for humans + agents</span><a href="https://github.com/gingered-cat/asiri/blob/main/docs/ethos.md">page source ↗</a></footer>
+    </main>
+
+    <aside class="reading-guide tree" aria-label="Reading guide">
+      <details open>
+        <summary><span class="chevron" aria-hidden="true">›</span> reading guide</summary>
+        <ul class="branches">
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> collaboration, with boundaries</summary>
+              <ul class="branches">
+                <li><a href="#collaboration-with-boundaries">overview</a></li>
+                <li><a href="#the-human-decides">the human decides</a></li><li><a href="#the-agent-does-the-work">the agent does the work</a></li>
+              </ul>
+            </details>
+          </li>
+          
+          <li><a href="#consent-stays-visible">consent stays visible</a></li>
+          
+          <li><a href="#trust-has-limits">trust has limits</a></li>
+          
+          <li><a href="#start-with-one-useful-task">start with one useful task</a></li>
+          
+        </ul>
+      </details>
+      <p class="guide-note">read it here.<br>take the markdown with you.</p>
+    </aside>
+  </div>
+
+  <button class="command-trigger" id="command-trigger" type="button" aria-haspopup="dialog" aria-controls="commands" hidden><span aria-hidden="true">:</span> commands <kbd>space</kbd></button>
+  <div id="commands" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-help" hidden>
+    <div class="command-head"><span id="command-title">commands</span><button type="button" id="command-close">close</button></div>
+    <p class="command-help" id="command-help">press a key, or choose an action</p>
+    <label class="search-label" for="command-search" hidden>find a page or section</label>
+    <input id="command-search" type="search" placeholder="find a page or section…" autocomplete="off" hidden>
+    <div id="command-list"></div>
+    <p id="command-empty" role="status" hidden>no matches. try “rex” or “pair”.</p>
+    <div class="command-foot"><span id="command-path">space</span><span>↑ ↓ move · enter select</span></div>
+  </div>
+  <div hidden id="search-index">
+    
+      <a href="/docs/">ethos</a>
+      
+        <a href="/docs/#collaboration-with-boundaries">ethos / collaboration, with boundaries</a>
+        <a href="/docs/#the-human-decides">ethos / the human decides</a><a href="/docs/#the-agent-does-the-work">ethos / the agent does the work</a>
+      
+        <a href="/docs/#consent-stays-visible">ethos / consent stays visible</a>
+        
+      
+        <a href="/docs/#trust-has-limits">ethos / trust has limits</a>
+        
+      
+        <a href="/docs/#start-with-one-useful-task">ethos / start with one useful task</a>
+        
+      
+    
+      <a href="/docs/getting-started/">getting started</a>
+      
+        <a href="/docs/getting-started/#before-you-begin">getting started / before you begin</a>
+        
+      
+        <a href="/docs/getting-started/#build-the-cli">getting started / build the CLI</a>
+        
+      
+        <a href="/docs/getting-started/#start-the-vault">getting started / start the vault</a>
+        
+      
+        <a href="/docs/getting-started/#pair-your-machine">getting started / pair your machine</a>
+        
+      
+        <a href="/docs/getting-started/#store-a-secret">getting started / store a secret</a>
+        
+      
+        <a href="/docs/getting-started/#approve-your-first-command">getting started / approve your first command</a>
+        <a href="/docs/getting-started/#if-the-command-waits">getting started / if the command waits</a><a href="/docs/getting-started/#what-to-do-next">getting started / what to do next</a>
+      
+    
+      <a href="/docs/rex/">rex support</a>
+      
+        <a href="/docs/rex/#install-the-integration">rex support / install the integration</a>
+        <a href="/docs/rex/#choose-an-owner-profile">rex support / choose an owner profile</a>
+      
+        <a href="/docs/rex/#answer-a-request">rex support / answer a request</a>
+        
+      
+        <a href="/docs/rex/#use-the-command-palette">rex support / use the command palette</a>
+        
+      
+        <a href="/docs/rex/#when-rex-is-unavailable">rex support / when Rex is unavailable</a>
+        <a href="/docs/rex/#troubleshoot-the-connection">rex support / troubleshoot the connection</a>
+      
+        <a href="/docs/rex/#remove-the-integration">rex support / remove the integration</a>
+        
+      
+    
+      <a href="/docs/cli/">cli usage</a>
+      
+        <a href="/docs/cli/#profiles-and-permissions">cli usage / profiles and permissions</a>
+        
+      
+        <a href="/docs/cli/#store-and-allow">cli usage / store and allow</a>
+        <a href="/docs/cli/#environment-variables">cli usage / environment variables</a><a href="/docs/cli/#stdin-and-files">cli usage / stdin and files</a>
+      
+        <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
+        
+      
+        <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
+        
+      
+        <a href="/docs/cli/#import-passwords">cli usage / import passwords</a>
+        
+      
+        <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
+        
+      
+    
+      <a href="/docs/self-hosting/">self-hosting</a>
+      
+        <a href="/docs/self-hosting/#the-local-boundary">self-hosting / the local boundary</a>
+        
+      
+        <a href="/docs/self-hosting/#build-and-run">self-hosting / build and run</a>
+        <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
+      
+        <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#updating">self-hosting / updating</a>
+        
+      
+        <a href="/docs/self-hosting/#connection-problems">self-hosting / connection problems</a>
+        
+      
+    
+      <a href="/docs/setups/">setups</a>
+      
+        <a href="/docs/setups/#a-person-in-a-terminal">setups / a person in a terminal</a>
+        
+      
+        <a href="/docs/setups/#an-agent-with-rex">setups / an agent with Rex</a>
+        <a href="/docs/setups/#give-the-agent-the-instructions">setups / give the agent the instructions</a>
+      
+        <a href="/docs/setups/#an-agent-without-rex">setups / an agent without Rex</a>
+        
+      
+        <a href="/docs/setups/#git-and-ssh-tools">setups / git and SSH tools</a>
+        
+      
+        <a href="/docs/setups/#remove-an-agents-access">setups / remove an agent&#39;s access</a>
+        
+      
+    
+  </div>
+</body>
+</html>

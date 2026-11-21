@@ -1,0 +1,189 @@
+const copyButton = document.querySelector('#copy-page');
+const source = document.querySelector('#markdown-source');
+const status = document.querySelector('#copy-status');
+copyButton.hidden = false;
+
+// Read the published Markdown, not innerText: code fences and links must survive.
+async function copyPage() {
+  if (copyButton.disabled) return;
+  copyButton.disabled = true;
+  status.textContent = 'reading markdown…';
+  try {
+    const response = await fetch(source.href);
+    if (!response.ok) throw new Error('Markdown request failed');
+    const markdown = await response.text();
+    await navigator.clipboard.writeText(markdown);
+    status.textContent = 'copied. ready for your agent.';
+  } catch {
+    status.textContent = 'could not copy. open raw .md and copy it there.';
+  } finally {
+    copyButton.disabled = false;
+  }
+}
+copyButton.addEventListener('click', copyPage);
+
+// Mobile has the same native trees, collapsed initially to keep the article first.
+if (matchMedia('(max-width: 760px)').matches) {
+  document.querySelector('.nav-root').open = false;
+  document.querySelector('.reading-guide > details').open = false;
+}
+
+const guideLinks = [...document.querySelectorAll('.reading-guide a')];
+const headings = guideLinks.map(link => document.getElementById(decodeURIComponent(link.hash.slice(1))));
+let scrollQueued = false;
+function markSection() {
+  let active = 0;
+  headings.forEach((heading, i) => {
+    if (heading.getBoundingClientRect().top <= 120) active = i;
+  });
+  guideLinks.forEach((link, i) => {
+    if (i === active) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  });
+  scrollQueued = false;
+}
+addEventListener('scroll', () => {
+  if (!scrollQueued) {
+    scrollQueued = true;
+    requestAnimationFrame(markSection);
+  }
+}, { passive: true });
+markSection();
+
+const dialog = document.querySelector('#commands');
+const trigger = document.querySelector('#command-trigger');
+const list = document.querySelector('#command-list');
+const search = document.querySelector('#command-search');
+const searchLabel = document.querySelector('.search-label');
+const empty = document.querySelector('#command-empty');
+const path = document.querySelector('#command-path');
+const title = document.querySelector('#command-title');
+const docs = [...document.querySelectorAll('[data-doc-link]')].map(link => ({
+  key: link.dataset.key, label: link.textContent, href: link.href,
+}));
+const index = [...document.querySelectorAll('#search-index a')].map(link => ({
+  label: link.textContent, href: link.href,
+}));
+let mode = 'root';
+let returnFocus;
+let items = [];
+
+function close() { dialog.hidden = true; }
+function navigate(href) { close(); location.assign(href); }
+const root = [
+  { key: 'g', label: 'go to a page', run: () => render('go') },
+  { key: 'c', label: 'copy page as markdown', run: () => { close(); copyPage(); } },
+  { key: '/', label: 'find a page or section', run: () => render('search') },
+  { key: 'm', label: 'open raw markdown', run: () => navigate(source.href) },
+];
+
+function render(nextMode) {
+  mode = nextMode;
+  search.hidden = searchLabel.hidden = mode !== 'search';
+  title.textContent = mode === 'go' ? 'go to a page' : mode === 'search' ? 'find in the guide' : 'commands';
+  path.textContent = mode === 'go' ? 'space → g' : mode === 'search' ? '⌘ / ctrl + k' : 'space';
+  if (mode === 'search') search.value = '';
+  updateList();
+  if (mode === 'search') search.focus();
+  else list.querySelector('button')?.focus();
+}
+
+function updateList() {
+  items = mode === 'root' ? root : mode === 'go'
+    ? docs.map(page => ({ ...page, run: () => navigate(page.href) }))
+    : index.filter(page => search.value.trim().toLowerCase().split(/\s+/).every(word => page.label.toLowerCase().includes(word)))
+      .map(page => ({ ...page, run: () => navigate(page.href) }));
+  list.replaceChildren();
+  items.forEach((item, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.index = i;
+    if (item.key) {
+      const key = document.createElement('kbd');
+      key.textContent = item.key;
+      button.append(key);
+    }
+    const label = document.createElement('span');
+    label.textContent = item.label;
+    button.append(label);
+    button.addEventListener('click', item.run);
+    list.append(button);
+  });
+  empty.hidden = items.length !== 0;
+}
+
+function open(nextMode = 'root') {
+  if (dialog.hidden) {
+    returnFocus = document.activeElement;
+    dialog.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+  }
+  render(nextMode);
+}
+trigger.hidden = false;
+trigger.setAttribute('aria-expanded', 'false');
+trigger.addEventListener('click', () => open());
+document.querySelector('#command-close').addEventListener('click', shut);
+search.addEventListener('input', updateList);
+function shut() {
+  close();
+  trigger.setAttribute('aria-expanded', 'false');
+  (returnFocus instanceof HTMLElement ? returnFocus : trigger).focus({ preventScroll: true });
+}
+document.addEventListener('pointerdown', event => {
+  if (dialog.hidden || dialog.contains(event.target) || trigger.contains(event.target)) return;
+  shut();
+});
+
+document.addEventListener('keydown', event => {
+  const editing = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]');
+  if (!dialog.hidden && event.key === 'Escape') {
+    event.preventDefault();
+    if (mode === 'root') shut();
+    else render('root');
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    open('search');
+    return;
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+  if (!dialog.hidden && event.key === 'Tab') {
+    const controls = [...dialog.querySelectorAll('button, input')].filter(el => !el.hidden);
+    const edge = event.shiftKey ? controls[0] : controls.at(-1);
+    if (document.activeElement === edge) {
+      event.preventDefault();
+      (event.shiftKey ? controls.at(-1) : controls[0]).focus();
+    }
+    return;
+  }
+  if (dialog.hidden) {
+    // Space remains native on links, buttons and disclosures; never steal typing.
+    const interactive = event.target instanceof Element && event.target.closest('a, button, summary');
+    if (event.key === ' ' && !event.repeat && !editing && !interactive && !getSelection()?.toString()) {
+      event.preventDefault();
+      open();
+    }
+    return;
+  }
+  const buttons = [...list.querySelectorAll('button')];
+  const current = buttons.indexOf(document.activeElement);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    const next = event.key === 'ArrowDown' ? (current + 1) % buttons.length : (current <= 0 ? buttons.length - 1 : current - 1);
+    buttons[next]?.focus();
+  } else if (event.key === 'Enter' && document.activeElement === search) {
+    event.preventDefault();
+    items[0]?.run();
+  } else if (!editing && event.key === 'Backspace' && mode !== 'root') {
+    event.preventDefault();
+    render('root');
+  } else if (!editing && mode !== 'search') {
+    const item = items.find(item => item.key === event.key.toLowerCase());
+    if (item) {
+      event.preventDefault();
+      item.run();
+    }
+  }
+});

@@ -8,7 +8,7 @@
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --paper: #14120F; --ink: #ECE6D9; --accent: #E2683F; --mute: rgba(236, 230, 217, 0.68); --line: rgba(236, 230, 217, 0.14); --tint: rgba(226, 104, 63, 0.1); }
+  :root { --paper: #14120F; --ink: #ECE6D9; --accent: #F08A62; --mute: rgba(236, 230, 217, 0.68); --line: rgba(236, 230, 217, 0.14); --tint: rgba(240, 138, 98, 0.12); }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

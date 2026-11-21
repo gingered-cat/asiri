@@ -166,6 +166,12 @@ go run ./dev ci      # fmt, vet, test -race, cross-compile
 go run ./dev image   # docker build
 ```
 
+The website is static. Edit documentation in `docs/*.md` and the shared layout in
+`docs/layout.html`, then run `go run ./dev docs`. Commit the generated pages and
+Markdown under `site/docs/` with their sources. `go run ./dev docs --check` detects
+stale output. Preview with `python3 -m http.server 8788 --directory site` and open
+`http://localhost:8788/docs/`. Pages deploys the `site/` directory without a build step.
+
 ## license
 
 Apache-2.0
