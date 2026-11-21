@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -140,6 +141,31 @@ func Installed() (bool, string, error) {
 		return false, config, nil
 	}
 	return strings.Contains(string(b), begin), config, err
+}
+
+var setupLine = regexp.MustCompile(`\.setup\(\{ bin = "((?:[^"\\]|\\.)*)", profile = "((?:[^"\\]|\\.)*)" \}\)`)
+
+// InstalledWith returns the asiri binary and profile in init.lua's block,
+// or ok=false when asiri isn't installed in Rex.
+func InstalledWith() (bin, profile string, ok bool) {
+	config, err := ConfigPath()
+	if err != nil {
+		return "", "", false
+	}
+	b, err := os.ReadFile(config)
+	if err != nil {
+		return "", "", false
+	}
+	i := strings.Index(string(b), begin)
+	if i < 0 {
+		return "", "", false
+	}
+	m := setupLine.FindStringSubmatch(string(b[i:]))
+	if m == nil {
+		return "", "", false
+	}
+	unq := strings.NewReplacer(`\\`, `\`, `\"`, `"`, `\n`, "\n")
+	return unq.Replace(m[1]), unq.Replace(m[2]), true
 }
 
 // Block is the managed block. Its version line is a hash of the plugin, so

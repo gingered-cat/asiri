@@ -63,6 +63,7 @@ func init() {
 		"pending":   {"pending [--json]", "list requests waiting for approval", pendingCmd},
 		"rex":       {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
 		"revoke":    {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
+		"update":    {"update [--check] [--version vX.Y.Z] [--force]", "replace this binary with the latest verified release", updateCmd},
 		"version":   {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}
 }

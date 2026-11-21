@@ -164,6 +164,7 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 | `asiri ssh ARGS` / `asiri ssh-agent` / `asiri pubkey REF` | ssh with an asiri key / an agent socket / the public key |
 | `asiri import FILE [--dry-run] [--keep] [--vault V]` | import an Apple Passwords or Google Password Manager export |
 | `asiri mcp` / `asiri skill` | MCP server on stdio for an agent / print the agent skill |
+| `asiri update [--check] [--version V]` | replace this binary with the latest release, checksum-verified; refreshes the Rex plugin |
 | `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |

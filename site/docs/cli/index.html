@@ -138,6 +138,12 @@ asiri log
 asiri log verify
 </code></pre>
 <p>The audit log is hash-chained. Verification checks its chain, not whether every action was a good decision. Only an owner can read it.</p>
+<h2 id="install-and-update">install and update</h2>
+<pre><code class="language-sh">curl -fsSL https://asiri.run/install.sh | sh   # first install: latest release, checksum-verified
+asiri update --check                           # is a newer release out?
+asiri update                                   # replace this binary with it
+</code></pre>
+<p><code>asiri update</code> downloads the release for your OS and chip, checks it against the release's <code>checksums.txt</code>, and swaps it in place of the running binary. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with <code>docker compose -f deploy/compose.yaml pull</code> and <code>up -d</code>. A development build refuses to replace itself unless you pass <code>--force</code>; so does an older <code>--version</code>. <code>v0.1.0</code> predates <code>asiri update</code>, so run the install script once to get it.</p>
 <h2 id="exit-codes">exit codes</h2>
 <table>
 <thead>
@@ -202,6 +208,8 @@ asiri log verify
           <li><a href="#import-passwords">import passwords</a></li>
           
           <li><a href="#lock-and-audit">lock and audit</a></li>
+          
+          <li><a href="#install-and-update">install and update</a></li>
           
           <li><a href="#exit-codes">exit codes</a></li>
           
@@ -295,6 +303,9 @@ asiri log verify
         
       
         <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#install-and-update">cli usage / install and update</a>
         
       
         <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
