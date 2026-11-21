@@ -33,6 +33,10 @@ jobs:
       - name: No token
         if: env.HAS_TOKEN != 'true'
         run: echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping the deploy. See .github/workflows/site.yml."
+      # Cloudflare's 4-hour browser cache overrides shorter Cache-Control
+      # headers, so new CSS/JS get new URLs instead: ?v=<commit>.
+      - name: Stamp asset URLs with this commit
+        run: go run ./dev stamp site "${GITHUB_SHA::12}"
       - name: Deploy to Cloudflare Pages
         if: env.HAS_TOKEN == 'true'
         uses: cloudflare/wrangler-action@v4
