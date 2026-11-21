@@ -220,3 +220,23 @@ document.addEventListener('keydown', event => {
     }
   }
 });
+
+// Star count beside github in the header (shared cache with the home page).
+(async () => {
+  let n = null;
+  try {
+    const hit = JSON.parse(sessionStorage.getItem('asiri:stars') || 'null');
+    if (hit && Date.now() - hit.at < 600000) n = hit.n;
+    else {
+      const r = await fetch('https://api.github.com/repos/gingered-cat/asiri', { headers: { Accept: 'application/vnd.github+json' } });
+      n = r.ok ? (await r.json()).stargazers_count : null;
+      if (Number.isInteger(n)) sessionStorage.setItem('asiri:stars', JSON.stringify({ n, at: Date.now() }));
+    }
+  } catch { n = null; }
+  if (!Number.isInteger(n)) return;
+  for (const el of document.querySelectorAll('[data-gh-stars]')) {
+    el.textContent = n.toLocaleString('en');
+    el.closest('a')?.setAttribute('aria-label', `github, ${n} star${n === 1 ? '' : 's'}`);
+    el.hidden = false;
+  }
+})();

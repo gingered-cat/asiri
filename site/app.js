@@ -131,88 +131,26 @@ if (!reduced) {
   whenVisible(lock, demo.start, demo.stop);
 }
 
-// ---- the GitHub mark: still, with a few stars twinkling around it ----
-const gh = document.getElementById("gh");
-if (gh) {
-  const art = gh.textContent.split("\n");
-  const W = 40, H = art.length + 2, ox = 6, oy = 1;
-  const sky = Array.from({ length: H }, (_, y) =>
-    Array.from({ length: W }, (_, x) => (art[y - oy] || "")[x - ox] || " "));
-  // each row's span of the mark, so stars stay out of its hollow middle too
-  const span = sky.map((row) => {
-    const xs = row.map((c, x) => (c !== " " ? x : -1)).filter((x) => x >= 0);
-    return xs.length ? [xs[0], xs[xs.length - 1]] : null;
-  });
-  const near = (x, y) => {
-    for (let dy = -1; dy <= 1; dy++) {
-      const s = span[y + dy];
-      if (s && x >= s[0] - 2 && x <= s[1] + 2) return true;
-    }
-    return false;
-  };
-  const free = [];
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!near(x, y)) free.push([x, y]);
-  const rand = seeded(7420);
-  const stars = [];
-  while (stars.length < 14 && free.length) {
-    const [x, y] = free[Math.floor(rand() * free.length)];
-    stars.push({ x, y, born: -1 });
-    for (let j = free.length - 1; j >= 0; j--) // keep stars apart
-      if (Math.abs(free[j][0] - x) <= 2 && Math.abs(free[j][1] - y) <= 1) free.splice(j, 1);
-  }
-  const TWINKLE = ["+", "*", "*", "+", "."]; // ~12 fps: one twinkle lasts ~400 ms
-  const FRAME = 83;
-  const esc = (c) => (c === "<" ? "&lt;" : c === "&" ? "&amp;" : c);
-  const render = (frame) => {
-    const cells = sky.map((row) => row.map(esc));
-    for (const s of stars) {
-      const k = s.born < 0 ? -1 : frame - s.born;
-      cells[s.y][s.x] = k >= 0 && k < TWINKLE.length
-        ? `<span class="on">${TWINKLE[k]}</span>`
-        : '<span class="dim">.</span>';
-    }
-    gh.innerHTML = cells.map((row) => row.join("").replace(/\s+$/, "")).join("\n");
-  };
-  render(0);
-  if (!reduced) {
-    let shown = -1;
-    const sparkle = clock((t) => {
-      const frame = Math.floor(t / FRAME);
-      if (frame === shown) return; // only redraw on a new frame
-      shown = frame;
-      const active = stars.filter((s) => s.born >= 0 && frame - s.born < TWINKLE.length).length;
-      if (active < 3 && rand() < 0.12) { // start a new twinkle now and then, never more than three
-        const idle = stars.filter((s) => s.born < 0 || frame - s.born >= TWINKLE.length + 6);
-        if (idle.length) idle[Math.floor(rand() * idle.length)].born = frame;
-      }
-      render(frame);
-    });
-    whenVisible(gh, sparkle.start, sparkle.stop);
-  }
+// ---- star count beside github in the navbar ----
+// Cached for ten minutes so moving between pages doesn't spend the API's rate limit.
+async function githubStars() {
+  try {
+    const hit = JSON.parse(sessionStorage.getItem("asiri:stars") || "null");
+    if (hit && Date.now() - hit.at < 600000) return hit.n;
+    const r = await fetch("https://api.github.com/repos/gingered-cat/asiri", { headers: { Accept: "application/vnd.github+json" } });
+    const n = r.ok ? (await r.json()).stargazers_count : null;
+    if (Number.isInteger(n)) sessionStorage.setItem("asiri:stars", JSON.stringify({ n, at: Date.now() }));
+    return Number.isInteger(n) ? n : null;
+  } catch { return null; }
 }
-
-// ---- live star count: digits roll into place ----
-const starN = document.getElementById("star-n");
-if (starN) {
-  fetch("https://api.github.com/repos/gingered-cat/asiri", { headers: { Accept: "application/vnd.github+json" } })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((r) => {
-      const n = r && r.stargazers_count;
-      if (!Number.isInteger(n)) return;
-      if (n === 0) return decode(starN, "be the first star");
-      const label = n === 1 ? " star" : " stars";
-      if (reduced) { starN.textContent = n.toLocaleString("en") + label; return; }
-      const digits = [...n.toLocaleString("en")];
-      starN.setAttribute("aria-label", n + label);
-      starN.innerHTML = digits.map((d, i) => /\d/.test(d)
-        ? `<span class="digit" aria-hidden="true"><span class="wheel" style="--i:${i}">0\n1\n2\n3\n4\n5\n6\n7\n8\n9</span></span>`
-        : `<span aria-hidden="true">${d}</span>`).join("") + `<span aria-hidden="true">${label}</span>`;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        starN.querySelectorAll(".wheel").forEach((w, i) => w.style.setProperty("--d", digits.filter((d) => /\d/.test(d))[i]));
-      }));
-    })
-    .catch(() => {});
-}
+githubStars().then((n) => {
+  if (n === null) return;
+  for (const el of document.querySelectorAll("[data-gh-stars]")) {
+    el.textContent = n.toLocaleString("en");
+    el.closest("a")?.setAttribute("aria-label", `github, ${n} star${n === 1 ? "" : "s"}`);
+    el.hidden = false;
+  }
+});
 
 // ---- sections settle in the first time they scroll into view ----
 if (!reduced) {
@@ -220,7 +158,7 @@ if (!reduced) {
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }, { threshold: 0.15 });
   document.querySelectorAll("main > section").forEach((section) => {
-    [...section.querySelectorAll(":scope > h2, :scope > p, :scope > pre, .row, .actions, .sky, .star-text")]
+    [...section.querySelectorAll(":scope > h2, :scope > p, :scope > pre, .row, .actions")]
       .forEach((el, i) => { el.classList.add("reveal"); el.style.setProperty("--i", Math.min(i, 8)); });
     io.observe(section);
   });

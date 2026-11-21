@@ -89,20 +89,9 @@ h2 { font-size: 16px; line-height: 24px; padding-bottom: 16px; }
 .note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; line-height: 20px; color: var(--mute); }
 .note b, .note code { color: var(--ink); }
 
-/* the github mark, with ascii stars twinkling around it */
-.star { display: grid; grid-template-columns: auto 1fr; gap: 32px; align-items: center; }
-.sky { margin: 0; }
-.gh { font: inherit; font-size: 11px; line-height: 1.1; letter-spacing: 0; color: var(--ink); white-space: pre; }
-.gh .on { color: var(--accent); }
-.gh .dim { color: var(--mute); opacity: 0.55; }
-.star-text .sub { padding-top: 0; }
-.count { padding-top: 16px; font-size: 13px; line-height: 20px; }
-/* rolling digits: each slot keeps its width; the wheel springs to its digit */
-.digit { display: inline-block; height: 20px; overflow: hidden; vertical-align: bottom; }
-.wheel { display: block; white-space: pre; line-height: 20px; transform: translateY(calc(var(--d, 0) * -20px));
-  transition: transform 700ms cubic-bezier(0.34, 1.32, 0.64, 1); transition-delay: calc(var(--i, 0) * 35ms); }
-.count a { color: var(--accent); }
-.count .on { font-weight: 700; }
+/* the star count beside github in the navbar */
+.gh-stars { margin-left: 8px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.gh-stars::before { content: "* "; }
 
 footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 120px; padding-top: 16px; border-top: 1px solid var(--line);
   font-size: 12px; line-height: 16px; color: var(--mute); }
@@ -117,7 +106,6 @@ footer nav { gap: 20px; font-size: 12px; line-height: 16px; }
   .steps .row span:last-child { grid-column: 2; }
   .links .row { grid-template-columns: 64px 1fr; }
   .links .row > :last-child { display: none; }
-  .star { grid-template-columns: 1fr; gap: 16px; }
 }
 /* sections settle in once, a row at a time */
 .js .reveal { opacity: 0; transform: translateY(4px);
