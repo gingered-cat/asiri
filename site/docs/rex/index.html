@@ -1,0 +1,315 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rex support · asiri docs</title>
+  <meta name="description" content="Approve an agent&#39;s request without leaving your workspace. asiri integrates with the command palette in [Rex](https://www.superlogical.com/rex).">
+  <link rel="canonical" href="https://asiri.run/docs/rex/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+  <link rel="alternate" type="text/markdown" href="/docs/rex.md" title="rex support as Markdown">
+  <script src="/docs/docs.js" type="module"></script>
+</head>
+<body class="docs" data-page="rex">
+  <a class="skip" href="#content">skip to content</a>
+  <header class="docs-header">
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <a class="docs-label" href="/docs/">field guide</a>
+    <nav aria-label="Site"><a href="/">home</a><a href="https://github.com/gingered-cat/asiri">github ↗</a></nav>
+  </header>
+
+  <div class="docs-layout">
+    <nav class="docs-nav tree" aria-label="Documentation">
+      <details class="nav-root" open>
+        <summary><span class="chevron" aria-hidden="true">›</span> documentation <span class="count">06</span></summary>
+        <div class="nav-groups">
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> begin</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/" data-doc-link data-key="e" >ethos</a></li>
+            
+              <li><a href="/docs/getting-started/" data-doc-link data-key="s" >getting started</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> use</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/rex/" data-doc-link data-key="r" aria-current="page">rex support</a></li>
+            
+              <li><a href="/docs/cli/" data-doc-link data-key="c" >cli usage</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> operate</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/self-hosting/" data-doc-link data-key="h" >self-hosting</a></li>
+            
+              <li><a href="/docs/setups/" data-doc-link data-key="u" >setups</a></li>
+            
+            </ul>
+          </details>
+        
+        </div>
+      </details>
+      <p class="nav-note">your secrets.<br>your permission.</p>
+      <a class="skill-link" href="/skill.md">agent skill ↗</a>
+    </nav>
+
+    <main id="content" tabindex="-1">
+      <div class="page-meta"><span>use / rex support</span><span>asiri:smol</span></div>
+      <div class="page-actions">
+        <button type="button" id="copy-page" hidden>copy page as markdown <span aria-hidden="true">↗</span></button>
+        <a id="markdown-source" href="/docs/rex.md">raw .md</a>
+      </div>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+      <article class="prose"><h1 id="rex-support">rex support</h1>
+<p>Approve an agent's request without leaving your workspace. asiri integrates with the command palette in <a href="https://www.superlogical.com/rex">Rex</a>.</p>
+<h2 id="install-the-integration">install the integration</h2>
+<p>First finish <a href="/docs/getting-started/">getting started</a>. You need a paired owner profile, a built asiri binary at a stable path, and the Rex CLI on PATH.</p>
+<pre><code class="language-sh">asiri rex install
+asiri rex status
+</code></pre>
+<p>The installer adds asiri's marked block to Rex's <code>init.lua</code>. It runs <code>rex config check</code> and restores the previous configuration if validation fails. It reloads Rex when possible. If Rex is not running, start it to load the integration.</p>
+<p>Do not install from <code>go run ./cmd/asiri</code>. That binary lives in a temporary directory. Use the binary built by <code>go run ./dev bin</code>.</p>
+<h3 id="choose-an-owner-profile">choose an owner profile</h3>
+<p>The integration approves as <code>owner</code> by default. If your owner profile has another name, pass it explicitly:</p>
+<pre><code class="language-sh">asiri rex install --profile personal
+</code></pre>
+<p>The profile must already exist and have the owner role. Installation refuses an agent profile.</p>
+<h2 id="answer-a-request">answer a request</h2>
+<p>When an agent requests access, connected Rex apps show the secret reference and the proposed command:</p>
+<pre><code class="language-text">claude wants asiri://dev/github
+  › Allow once       gh pr create --fill · ~/proj/api · &quot;open the PR&quot;
+    Allow for 15 minutes
+    Allow for 1 hour
+    Deny
+</code></pre>
+<p>Return allows once. Closing the prompt denies. When several Rex apps show the request, the first answer wins.</p>
+<p>The plugin records the answer using your owner profile. The requesting agent cannot approve itself. Longer grants are still limited by the secret's <code>--max-grant</code> policy.</p>
+<h2 id="use-the-command-palette">use the command palette</h2>
+<p>Press <code>Cmd+Shift+P</code> in Rex and type <code>asiri</code>:</p>
+<table>
+<thead>
+<tr>
+<th>action</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Asiri: Approve Waiting Requests…</td>
+<td>Inspect and answer pending requests.</td>
+</tr>
+<tr>
+<td>Asiri: Revoke Everything</td>
+<td>Revoke all grants and deny pending requests.</td>
+</tr>
+<tr>
+<td>Asiri: Lock the Vault</td>
+<td>Lock the vault until you unlock it.</td>
+</tr>
+</tbody>
+</table>
+<p>Revoking a grant stops future uses. It does not erase a secret already delivered to a running program.</p>
+<h2 id="when-rex-is-unavailable">when Rex is unavailable</h2>
+<p>Rex is optional. A command you run yourself can ask in the terminal. An agent command waits and prints the approval command for you.</p>
+<p>In your own terminal, inspect the pending request before answering:</p>
+<pre><code class="language-sh">asiri pending
+asiri approve ID
+# or refuse it
+asiri deny ID
+</code></pre>
+<p>Replace <code>ID</code> with the request identifier. If you want a different Rex server, set <code>ASIRI_REX_SERVER</code> to its host label or socket path in the environment of the requesting process.</p>
+<h3 id="troubleshoot-the-connection">troubleshoot the connection</h3>
+<p>Run <code>asiri status</code> to check the vault connection. Run <code>asiri rex status</code> to check installation. Make sure a Rex app is connected and the installed binary still exists at its original path.</p>
+<p>If you moved the binary, rerun <code>asiri rex install</code> from its new location. Do not solve an approval failure by giving the agent an owner profile.</p>
+<h2 id="remove-the-integration">remove the integration</h2>
+<pre><code class="language-sh">asiri rex uninstall
+</code></pre>
+<p>This removes asiri's integration from Rex. It does not remove your vault or disable terminal approvals.</p>
+</article>
+      <nav class="page-turn" aria-label="Adjacent pages">
+        <a href="/docs/getting-started/"><span>← previous</span>getting started</a>
+        <a href="/docs/cli/"><span>next →</span>cli usage</a>
+      </nav>
+      <footer class="docs-footer"><span>made for humans + agents</span><a href="https://github.com/gingered-cat/asiri/blob/main/docs/rex.md">page source ↗</a></footer>
+    </main>
+
+    <aside class="reading-guide tree" aria-label="Reading guide">
+      <details open>
+        <summary><span class="chevron" aria-hidden="true">›</span> reading guide</summary>
+        <ul class="branches">
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> install the integration</summary>
+              <ul class="branches">
+                <li><a href="#install-the-integration">overview</a></li>
+                <li><a href="#choose-an-owner-profile">choose an owner profile</a></li>
+              </ul>
+            </details>
+          </li>
+          
+          <li><a href="#answer-a-request">answer a request</a></li>
+          
+          <li><a href="#use-the-command-palette">use the command palette</a></li>
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> when Rex is unavailable</summary>
+              <ul class="branches">
+                <li><a href="#when-rex-is-unavailable">overview</a></li>
+                <li><a href="#troubleshoot-the-connection">troubleshoot the connection</a></li>
+              </ul>
+            </details>
+          </li>
+          
+          <li><a href="#remove-the-integration">remove the integration</a></li>
+          
+        </ul>
+      </details>
+      <p class="guide-note">read it here.<br>take the markdown with you.</p>
+    </aside>
+  </div>
+
+  <button class="command-trigger" id="command-trigger" type="button" aria-haspopup="dialog" aria-controls="commands" hidden><span aria-hidden="true">:</span> commands <kbd>space</kbd></button>
+  <div id="commands" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-help" hidden>
+    <div class="command-head"><span id="command-title">commands</span><button type="button" id="command-close">close</button></div>
+    <p class="command-help" id="command-help">press a key, or choose an action</p>
+    <label class="search-label" for="command-search" hidden>find a page or section</label>
+    <input id="command-search" type="search" placeholder="find a page or section…" autocomplete="off" hidden>
+    <div id="command-list"></div>
+    <p id="command-empty" role="status" hidden>no matches. try “rex” or “pair”.</p>
+    <div class="command-foot"><span id="command-path">space</span><span>↑ ↓ move · enter select</span></div>
+  </div>
+  <div hidden id="search-index">
+    
+      <a href="/docs/">ethos</a>
+      
+        <a href="/docs/#collaboration-with-boundaries">ethos / collaboration, with boundaries</a>
+        <a href="/docs/#the-human-decides">ethos / the human decides</a><a href="/docs/#the-agent-does-the-work">ethos / the agent does the work</a>
+      
+        <a href="/docs/#consent-stays-visible">ethos / consent stays visible</a>
+        
+      
+        <a href="/docs/#trust-has-limits">ethos / trust has limits</a>
+        
+      
+        <a href="/docs/#start-with-one-useful-task">ethos / start with one useful task</a>
+        
+      
+    
+      <a href="/docs/getting-started/">getting started</a>
+      
+        <a href="/docs/getting-started/#before-you-begin">getting started / before you begin</a>
+        
+      
+        <a href="/docs/getting-started/#build-the-cli">getting started / build the CLI</a>
+        
+      
+        <a href="/docs/getting-started/#start-the-vault">getting started / start the vault</a>
+        
+      
+        <a href="/docs/getting-started/#pair-your-machine">getting started / pair your machine</a>
+        
+      
+        <a href="/docs/getting-started/#store-a-secret">getting started / store a secret</a>
+        
+      
+        <a href="/docs/getting-started/#approve-your-first-command">getting started / approve your first command</a>
+        <a href="/docs/getting-started/#if-the-command-waits">getting started / if the command waits</a><a href="/docs/getting-started/#what-to-do-next">getting started / what to do next</a>
+      
+    
+      <a href="/docs/rex/">rex support</a>
+      
+        <a href="/docs/rex/#install-the-integration">rex support / install the integration</a>
+        <a href="/docs/rex/#choose-an-owner-profile">rex support / choose an owner profile</a>
+      
+        <a href="/docs/rex/#answer-a-request">rex support / answer a request</a>
+        
+      
+        <a href="/docs/rex/#use-the-command-palette">rex support / use the command palette</a>
+        
+      
+        <a href="/docs/rex/#when-rex-is-unavailable">rex support / when Rex is unavailable</a>
+        <a href="/docs/rex/#troubleshoot-the-connection">rex support / troubleshoot the connection</a>
+      
+        <a href="/docs/rex/#remove-the-integration">rex support / remove the integration</a>
+        
+      
+    
+      <a href="/docs/cli/">cli usage</a>
+      
+        <a href="/docs/cli/#profiles-and-permissions">cli usage / profiles and permissions</a>
+        
+      
+        <a href="/docs/cli/#store-and-allow">cli usage / store and allow</a>
+        <a href="/docs/cli/#environment-variables">cli usage / environment variables</a><a href="/docs/cli/#stdin-and-files">cli usage / stdin and files</a>
+      
+        <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
+        
+      
+        <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
+        
+      
+        <a href="/docs/cli/#import-passwords">cli usage / import passwords</a>
+        
+      
+        <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
+        
+      
+    
+      <a href="/docs/self-hosting/">self-hosting</a>
+      
+        <a href="/docs/self-hosting/#the-local-boundary">self-hosting / the local boundary</a>
+        
+      
+        <a href="/docs/self-hosting/#build-and-run">self-hosting / build and run</a>
+        <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
+      
+        <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#updating">self-hosting / updating</a>
+        
+      
+        <a href="/docs/self-hosting/#connection-problems">self-hosting / connection problems</a>
+        
+      
+    
+      <a href="/docs/setups/">setups</a>
+      
+        <a href="/docs/setups/#a-person-in-a-terminal">setups / a person in a terminal</a>
+        
+      
+        <a href="/docs/setups/#an-agent-with-rex">setups / an agent with Rex</a>
+        <a href="/docs/setups/#give-the-agent-the-instructions">setups / give the agent the instructions</a>
+      
+        <a href="/docs/setups/#an-agent-without-rex">setups / an agent without Rex</a>
+        
+      
+        <a href="/docs/setups/#git-and-ssh-tools">setups / git and SSH tools</a>
+        
+      
+        <a href="/docs/setups/#remove-an-agents-access">setups / remove an agent&#39;s access</a>
+        
+      
+    
+  </div>
+</body>
+</html>

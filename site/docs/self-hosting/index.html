@@ -1,0 +1,286 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>self-hosting · asiri docs</title>
+  <meta name="description" content="The default deployment is a vault on your own machine. The public asiri website hosts documentation, not your secrets.">
+  <link rel="canonical" href="https://asiri.run/docs/self-hosting/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+  <link rel="alternate" type="text/markdown" href="/docs/self-hosting.md" title="self-hosting as Markdown">
+  <script src="/docs/docs.js" type="module"></script>
+</head>
+<body class="docs" data-page="self-hosting">
+  <a class="skip" href="#content">skip to content</a>
+  <header class="docs-header">
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <a class="docs-label" href="/docs/">field guide</a>
+    <nav aria-label="Site"><a href="/">home</a><a href="https://github.com/gingered-cat/asiri">github ↗</a></nav>
+  </header>
+
+  <div class="docs-layout">
+    <nav class="docs-nav tree" aria-label="Documentation">
+      <details class="nav-root" open>
+        <summary><span class="chevron" aria-hidden="true">›</span> documentation <span class="count">06</span></summary>
+        <div class="nav-groups">
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> begin</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/" data-doc-link data-key="e" >ethos</a></li>
+            
+              <li><a href="/docs/getting-started/" data-doc-link data-key="s" >getting started</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> use</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/rex/" data-doc-link data-key="r" >rex support</a></li>
+            
+              <li><a href="/docs/cli/" data-doc-link data-key="c" >cli usage</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> operate</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/self-hosting/" data-doc-link data-key="h" aria-current="page">self-hosting</a></li>
+            
+              <li><a href="/docs/setups/" data-doc-link data-key="u" >setups</a></li>
+            
+            </ul>
+          </details>
+        
+        </div>
+      </details>
+      <p class="nav-note">your secrets.<br>your permission.</p>
+      <a class="skill-link" href="/skill.md">agent skill ↗</a>
+    </nav>
+
+    <main id="content" tabindex="-1">
+      <div class="page-meta"><span>operate / self-hosting</span><span>asiri:smol</span></div>
+      <div class="page-actions">
+        <button type="button" id="copy-page" hidden>copy page as markdown <span aria-hidden="true">↗</span></button>
+        <a id="markdown-source" href="/docs/self-hosting.md">raw .md</a>
+      </div>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+      <article class="prose"><h1 id="self-hosting">self-hosting</h1>
+<p>The default deployment is a vault on your own machine. The public asiri website hosts documentation, not your secrets.</p>
+<h2 id="the-local-boundary">the local boundary</h2>
+<p>The Compose file publishes only <code>127.0.0.1:7420</code>. The server uses mutual TLS: clients authenticate with certificates, and clients pin the server CA during pairing.</p>
+<p>The container runs as user 65532, drops Linux capabilities, and has a read-only root filesystem. The <code>/data</code> volume remains writable. Keep it private and back it up.</p>
+<p>Do not expose this port publicly just to let an agent connect. An agent on the same machine can use the local CLI with its own profile.</p>
+<h2 id="build-and-run">build and run</h2>
+<p>Follow <a href="/docs/getting-started/">getting started</a> to create a key and pair an owner. From the repository root:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml up -d --build
+docker compose -f deploy/compose.yaml ps
+docker compose -f deploy/compose.yaml logs --tail 50 asiri
+</code></pre>
+<p>The <code>--build</code> flag builds the server from your checkout. Keep the host CLI and server on the same source revision.</p>
+<h3 id="key-file-mode">key-file mode</h3>
+<p>The default Compose file mounts <code>~/.config/asiri/master.key</code> as a Docker secret. <code>ASIRI_KEY_FILE</code> can point Compose at another key file on the host.</p>
+<p>The server unlocks from that file. Protect the file and its backups. On native Linux Docker, user 65532 must be able to read it. Do not make the key world-readable.</p>
+<h3 id="passphrase-mode">passphrase mode</h3>
+<p>Choose this before creating a new vault. It is not a migration procedure for an existing key-file vault.</p>
+<p>Remove both the service's <code>secrets</code> entry and the top-level <code>secrets</code> section from your local Compose file. Build the image, then initialize the empty vault interactively:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml build
+docker compose -f deploy/compose.yaml run --rm -it asiri \
+  server init --passphrase
+docker compose -f deploy/compose.yaml up -d
+</code></pre>
+<p>Pair your owner profile using <code>server pair-code</code>. Run <code>asiri unlock</code> and type the passphrase after each server start. Do not pass the passphrase in command arguments or an agent conversation.</p>
+<h2 id="persistence-and-backups">persistence and backups</h2>
+<p>Back up the entire <code>/data</code> directory, not only the database file. It also contains the server's identity. Back up the master key separately, or keep the passphrase in a secure recovery location.</p>
+<p>For a consistent filesystem backup, stop the service first:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml stop asiri
+docker compose -f deploy/compose.yaml cp asiri:/data ./asiri-backup
+docker compose -f deploy/compose.yaml start asiri
+</code></pre>
+<p>Choose a new backup destination each time. Protect that directory and test recovery on an isolated machine before depending on it. Do not use <code>docker compose down -v</code>: it deletes the vault volume.</p>
+<h2 id="updating">updating</h2>
+<p>Make a backup before updating. Review the source changes and any migration instructions. Rebuild the host CLI and the server from the same revision:</p>
+<pre><code class="language-sh">go run ./dev bin
+docker compose -f deploy/compose.yaml up -d --build
+asiri status
+</code></pre>
+<p>In passphrase mode, run <code>asiri unlock</code> after the restart. If the binary path changed, reinstall the <a href="/docs/rex/">Rex integration</a>.</p>
+<h2 id="connection-problems">connection problems</h2>
+<p>If <code>asiri status</code> cannot connect, inspect the container status and logs. Make sure that port 7420 is free and the key file is readable by the container user.</p>
+<p>If pairing fails, generate a fresh code. Do not bypass certificate checks. Replacing the server identity requires deliberate pairing with the new server.</p>
+<p>Remote hosting changes the trust and network boundary. Configure private networking, firewall rules, and certificate host names before pairing remote clients. The local Compose example is not a public-internet deployment guide.</p>
+</article>
+      <nav class="page-turn" aria-label="Adjacent pages">
+        <a href="/docs/cli/"><span>← previous</span>cli usage</a>
+        <a href="/docs/setups/"><span>next →</span>setups</a>
+      </nav>
+      <footer class="docs-footer"><span>made for humans + agents</span><a href="https://github.com/gingered-cat/asiri/blob/main/docs/self-hosting.md">page source ↗</a></footer>
+    </main>
+
+    <aside class="reading-guide tree" aria-label="Reading guide">
+      <details open>
+        <summary><span class="chevron" aria-hidden="true">›</span> reading guide</summary>
+        <ul class="branches">
+          
+          <li><a href="#the-local-boundary">the local boundary</a></li>
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> build and run</summary>
+              <ul class="branches">
+                <li><a href="#build-and-run">overview</a></li>
+                <li><a href="#key-file-mode">key-file mode</a></li><li><a href="#passphrase-mode">passphrase mode</a></li>
+              </ul>
+            </details>
+          </li>
+          
+          <li><a href="#persistence-and-backups">persistence and backups</a></li>
+          
+          <li><a href="#updating">updating</a></li>
+          
+          <li><a href="#connection-problems">connection problems</a></li>
+          
+        </ul>
+      </details>
+      <p class="guide-note">read it here.<br>take the markdown with you.</p>
+    </aside>
+  </div>
+
+  <button class="command-trigger" id="command-trigger" type="button" aria-haspopup="dialog" aria-controls="commands" hidden><span aria-hidden="true">:</span> commands <kbd>space</kbd></button>
+  <div id="commands" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-help" hidden>
+    <div class="command-head"><span id="command-title">commands</span><button type="button" id="command-close">close</button></div>
+    <p class="command-help" id="command-help">press a key, or choose an action</p>
+    <label class="search-label" for="command-search" hidden>find a page or section</label>
+    <input id="command-search" type="search" placeholder="find a page or section…" autocomplete="off" hidden>
+    <div id="command-list"></div>
+    <p id="command-empty" role="status" hidden>no matches. try “rex” or “pair”.</p>
+    <div class="command-foot"><span id="command-path">space</span><span>↑ ↓ move · enter select</span></div>
+  </div>
+  <div hidden id="search-index">
+    
+      <a href="/docs/">ethos</a>
+      
+        <a href="/docs/#collaboration-with-boundaries">ethos / collaboration, with boundaries</a>
+        <a href="/docs/#the-human-decides">ethos / the human decides</a><a href="/docs/#the-agent-does-the-work">ethos / the agent does the work</a>
+      
+        <a href="/docs/#consent-stays-visible">ethos / consent stays visible</a>
+        
+      
+        <a href="/docs/#trust-has-limits">ethos / trust has limits</a>
+        
+      
+        <a href="/docs/#start-with-one-useful-task">ethos / start with one useful task</a>
+        
+      
+    
+      <a href="/docs/getting-started/">getting started</a>
+      
+        <a href="/docs/getting-started/#before-you-begin">getting started / before you begin</a>
+        
+      
+        <a href="/docs/getting-started/#build-the-cli">getting started / build the CLI</a>
+        
+      
+        <a href="/docs/getting-started/#start-the-vault">getting started / start the vault</a>
+        
+      
+        <a href="/docs/getting-started/#pair-your-machine">getting started / pair your machine</a>
+        
+      
+        <a href="/docs/getting-started/#store-a-secret">getting started / store a secret</a>
+        
+      
+        <a href="/docs/getting-started/#approve-your-first-command">getting started / approve your first command</a>
+        <a href="/docs/getting-started/#if-the-command-waits">getting started / if the command waits</a><a href="/docs/getting-started/#what-to-do-next">getting started / what to do next</a>
+      
+    
+      <a href="/docs/rex/">rex support</a>
+      
+        <a href="/docs/rex/#install-the-integration">rex support / install the integration</a>
+        <a href="/docs/rex/#choose-an-owner-profile">rex support / choose an owner profile</a>
+      
+        <a href="/docs/rex/#answer-a-request">rex support / answer a request</a>
+        
+      
+        <a href="/docs/rex/#use-the-command-palette">rex support / use the command palette</a>
+        
+      
+        <a href="/docs/rex/#when-rex-is-unavailable">rex support / when Rex is unavailable</a>
+        <a href="/docs/rex/#troubleshoot-the-connection">rex support / troubleshoot the connection</a>
+      
+        <a href="/docs/rex/#remove-the-integration">rex support / remove the integration</a>
+        
+      
+    
+      <a href="/docs/cli/">cli usage</a>
+      
+        <a href="/docs/cli/#profiles-and-permissions">cli usage / profiles and permissions</a>
+        
+      
+        <a href="/docs/cli/#store-and-allow">cli usage / store and allow</a>
+        <a href="/docs/cli/#environment-variables">cli usage / environment variables</a><a href="/docs/cli/#stdin-and-files">cli usage / stdin and files</a>
+      
+        <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
+        
+      
+        <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
+        
+      
+        <a href="/docs/cli/#import-passwords">cli usage / import passwords</a>
+        
+      
+        <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
+        
+      
+    
+      <a href="/docs/self-hosting/">self-hosting</a>
+      
+        <a href="/docs/self-hosting/#the-local-boundary">self-hosting / the local boundary</a>
+        
+      
+        <a href="/docs/self-hosting/#build-and-run">self-hosting / build and run</a>
+        <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
+      
+        <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#updating">self-hosting / updating</a>
+        
+      
+        <a href="/docs/self-hosting/#connection-problems">self-hosting / connection problems</a>
+        
+      
+    
+      <a href="/docs/setups/">setups</a>
+      
+        <a href="/docs/setups/#a-person-in-a-terminal">setups / a person in a terminal</a>
+        
+      
+        <a href="/docs/setups/#an-agent-with-rex">setups / an agent with Rex</a>
+        <a href="/docs/setups/#give-the-agent-the-instructions">setups / give the agent the instructions</a>
+      
+        <a href="/docs/setups/#an-agent-without-rex">setups / an agent without Rex</a>
+        
+      
+        <a href="/docs/setups/#git-and-ssh-tools">setups / git and SSH tools</a>
+        
+      
+        <a href="/docs/setups/#remove-an-agents-access">setups / remove an agent&#39;s access</a>
+        
+      
+    
+  </div>
+</body>
+</html>

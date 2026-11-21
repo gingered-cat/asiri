@@ -1,0 +1,342 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cli usage · asiri docs</title>
+  <meta name="description" content="Use references instead of values. A reference such as `asiri://dev/github` identifies a secret without revealing it.">
+  <link rel="canonical" href="https://asiri.run/docs/cli/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+  <link rel="alternate" type="text/markdown" href="/docs/cli.md" title="cli usage as Markdown">
+  <script src="/docs/docs.js" type="module"></script>
+</head>
+<body class="docs" data-page="cli">
+  <a class="skip" href="#content">skip to content</a>
+  <header class="docs-header">
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <a class="docs-label" href="/docs/">field guide</a>
+    <nav aria-label="Site"><a href="/">home</a><a href="https://github.com/gingered-cat/asiri">github ↗</a></nav>
+  </header>
+
+  <div class="docs-layout">
+    <nav class="docs-nav tree" aria-label="Documentation">
+      <details class="nav-root" open>
+        <summary><span class="chevron" aria-hidden="true">›</span> documentation <span class="count">06</span></summary>
+        <div class="nav-groups">
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> begin</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/" data-doc-link data-key="e" >ethos</a></li>
+            
+              <li><a href="/docs/getting-started/" data-doc-link data-key="s" >getting started</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> use</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/rex/" data-doc-link data-key="r" >rex support</a></li>
+            
+              <li><a href="/docs/cli/" data-doc-link data-key="c" aria-current="page">cli usage</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> operate</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/self-hosting/" data-doc-link data-key="h" >self-hosting</a></li>
+            
+              <li><a href="/docs/setups/" data-doc-link data-key="u" >setups</a></li>
+            
+            </ul>
+          </details>
+        
+        </div>
+      </details>
+      <p class="nav-note">your secrets.<br>your permission.</p>
+      <a class="skill-link" href="/skill.md">agent skill ↗</a>
+    </nav>
+
+    <main id="content" tabindex="-1">
+      <div class="page-meta"><span>use / cli usage</span><span>asiri:smol</span></div>
+      <div class="page-actions">
+        <button type="button" id="copy-page" hidden>copy page as markdown <span aria-hidden="true">↗</span></button>
+        <a id="markdown-source" href="/docs/cli.md">raw .md</a>
+      </div>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+      <article class="prose"><h1 id="cli-usage">cli usage</h1>
+<p>Use references instead of values. A reference such as <code>asiri://dev/github</code> identifies a secret without revealing it.</p>
+<h2 id="profiles-and-permissions">profiles and permissions</h2>
+<p>An owner can store secrets, set policy, and approve requests. An agent can list secret metadata and request permitted use.</p>
+<p>Select a profile with <code>--profile NAME</code> on the command or <code>ASIRI_PROFILE=NAME</code> in its environment. Without either, the CLI uses <code>owner</code>.</p>
+<pre><code class="language-sh">asiri status
+asiri ls
+ASIRI_PROFILE=claude asiri ls
+</code></pre>
+<h2 id="store-and-allow">store and allow</h2>
+<pre><code class="language-sh">asiri add dev/github
+asiri policy dev/github --bins gh --max-grant 1h
+</code></pre>
+<p>The add prompt hides what you type. <code>--bins</code> lists the programs allowed to receive the secret. <code>--max-grant</code> limits approvals to <code>once</code>, <code>15m</code>, or <code>1h</code>.</p>
+<h3 id="environment-variables">environment variables</h3>
+<pre><code class="language-sh">asiri run --env GH_TOKEN=asiri://dev/github \
+  --reason &quot;open the PR&quot; -- gh pr create --fill
+</code></pre>
+<p>The variable is set for the child program. Other processes running as your user can inspect its environment while it runs. Prefer stdin when the program supports it.</p>
+<h3 id="stdin-and-files">stdin and files</h3>
+<p>Replace <code>YOUR_USER</code> with your registry username:</p>
+<pre><code class="language-sh">asiri run --stdin asiri://dev/registry \
+  --reason &quot;sign in to the registry&quot; -- docker login ghcr.io \
+  --username YOUR_USER --password-stdin
+</code></pre>
+<p>For a program that reads a file path from an environment variable, use a one-time pipe:</p>
+<pre><code class="language-sh">asiri run --file KUBECONFIG=asiri://ops/kubeconfig \
+  --reason &quot;check the rollout&quot; -- kubectl get pods
+</code></pre>
+<p>The pipe is readable once and does not store the value on disk. The program must support that access pattern. <code>--env</code> and <code>--file</code> can be repeated.</p>
+<p>Put asiri flags before <code>--</code>. Everything after it is the actual program and its arguments. Shells, interpreters, and wrappers are refused.</p>
+<h2 id="requests-and-grants">requests and grants</h2>
+<pre><code class="language-sh">asiri pending
+asiri approve ID --for 15m
+asiri deny ID
+asiri grants
+asiri revoke ID
+asiri revoke --all
+</code></pre>
+<p>Use a request ID with <code>approve</code> or <code>deny</code>. Use a grant ID with <code>revoke</code>. A grant lets the same program reuse an approved secret until expiry or revocation.</p>
+<p><code>revoke --all</code> also denies pending requests. It cannot take back a value already delivered to a process.</p>
+<h2 id="ssh-keys">ssh keys</h2>
+<p>First connect to your SSH host normally and verify its host key. Then generate an asiri key bound to that host:</p>
+<pre><code class="language-sh">asiri add ops/staging --ssh-generate --ssh-hosts staging
+asiri pubkey ops/staging
+</code></pre>
+<p>Install the public key in the remote account's <code>~/.ssh/authorized_keys</code>. Do not copy a private key out of the vault.</p>
+<pre><code class="language-sh">asiri ssh --reason &quot;check staging&quot; staging hostname
+</code></pre>
+<p>Put asiri's <code>--reason</code> before the destination. The remaining arguments go to OpenSSH. This needs OpenSSH 8.9 or newer for host-bound signing. Agent forwarding and non-login signatures are refused.</p>
+<h2 id="import-passwords">import passwords</h2>
+<p>Export from Apple Passwords or Google Password Manager yourself. Keep the plaintext export outside cloud-synced folders.</p>
+<pre><code class="language-sh">asiri import ~/Downloads/Passwords.csv --dry-run
+asiri import ~/Downloads/Passwords.csv
+</code></pre>
+<p>The second command overwrites and deletes the export after importing it. <code>--keep</code> preserves it. SSDs, snapshots, and backups can retain deleted data. Remove other copies and use disk encryption.</p>
+<p>Imported secrets are not usable until you set their allowed programs. Run <code>asiri ls</code> to find the exact references before setting policy.</p>
+<h2 id="lock-and-audit">lock and audit</h2>
+<pre><code class="language-sh">asiri lock
+asiri unlock
+asiri log
+asiri log verify
+</code></pre>
+<p>The audit log is hash-chained. Verification checks its chain, not whether every action was a good decision. Only an owner can read it.</p>
+<h2 id="exit-codes">exit codes</h2>
+<table>
+<thead>
+<tr>
+<th>code</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>125</td>
+<td>asiri itself failed.</td>
+</tr>
+<tr>
+<td>126</td>
+<td>Refused, denied, or expired. Do not work around a denial.</td>
+</tr>
+<tr>
+<td>127</td>
+<td>The program was not found.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>The command has a usage error.</td>
+</tr>
+<tr>
+<td>other</td>
+<td>The child program's exit code.</td>
+</tr>
+</tbody>
+</table>
+<p>An allowed program can still send a credential elsewhere. Scrubbing covers the value and known base64, hex, and URL representations, not arbitrary encodings. Choose allowed programs with that limit in mind.</p>
+</article>
+      <nav class="page-turn" aria-label="Adjacent pages">
+        <a href="/docs/rex/"><span>← previous</span>rex support</a>
+        <a href="/docs/self-hosting/"><span>next →</span>self-hosting</a>
+      </nav>
+      <footer class="docs-footer"><span>made for humans + agents</span><a href="https://github.com/gingered-cat/asiri/blob/main/docs/cli.md">page source ↗</a></footer>
+    </main>
+
+    <aside class="reading-guide tree" aria-label="Reading guide">
+      <details open>
+        <summary><span class="chevron" aria-hidden="true">›</span> reading guide</summary>
+        <ul class="branches">
+          
+          <li><a href="#profiles-and-permissions">profiles and permissions</a></li>
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> store and allow</summary>
+              <ul class="branches">
+                <li><a href="#store-and-allow">overview</a></li>
+                <li><a href="#environment-variables">environment variables</a></li><li><a href="#stdin-and-files">stdin and files</a></li>
+              </ul>
+            </details>
+          </li>
+          
+          <li><a href="#requests-and-grants">requests and grants</a></li>
+          
+          <li><a href="#ssh-keys">ssh keys</a></li>
+          
+          <li><a href="#import-passwords">import passwords</a></li>
+          
+          <li><a href="#lock-and-audit">lock and audit</a></li>
+          
+          <li><a href="#exit-codes">exit codes</a></li>
+          
+        </ul>
+      </details>
+      <p class="guide-note">read it here.<br>take the markdown with you.</p>
+    </aside>
+  </div>
+
+  <button class="command-trigger" id="command-trigger" type="button" aria-haspopup="dialog" aria-controls="commands" hidden><span aria-hidden="true">:</span> commands <kbd>space</kbd></button>
+  <div id="commands" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-help" hidden>
+    <div class="command-head"><span id="command-title">commands</span><button type="button" id="command-close">close</button></div>
+    <p class="command-help" id="command-help">press a key, or choose an action</p>
+    <label class="search-label" for="command-search" hidden>find a page or section</label>
+    <input id="command-search" type="search" placeholder="find a page or section…" autocomplete="off" hidden>
+    <div id="command-list"></div>
+    <p id="command-empty" role="status" hidden>no matches. try “rex” or “pair”.</p>
+    <div class="command-foot"><span id="command-path">space</span><span>↑ ↓ move · enter select</span></div>
+  </div>
+  <div hidden id="search-index">
+    
+      <a href="/docs/">ethos</a>
+      
+        <a href="/docs/#collaboration-with-boundaries">ethos / collaboration, with boundaries</a>
+        <a href="/docs/#the-human-decides">ethos / the human decides</a><a href="/docs/#the-agent-does-the-work">ethos / the agent does the work</a>
+      
+        <a href="/docs/#consent-stays-visible">ethos / consent stays visible</a>
+        
+      
+        <a href="/docs/#trust-has-limits">ethos / trust has limits</a>
+        
+      
+        <a href="/docs/#start-with-one-useful-task">ethos / start with one useful task</a>
+        
+      
+    
+      <a href="/docs/getting-started/">getting started</a>
+      
+        <a href="/docs/getting-started/#before-you-begin">getting started / before you begin</a>
+        
+      
+        <a href="/docs/getting-started/#build-the-cli">getting started / build the CLI</a>
+        
+      
+        <a href="/docs/getting-started/#start-the-vault">getting started / start the vault</a>
+        
+      
+        <a href="/docs/getting-started/#pair-your-machine">getting started / pair your machine</a>
+        
+      
+        <a href="/docs/getting-started/#store-a-secret">getting started / store a secret</a>
+        
+      
+        <a href="/docs/getting-started/#approve-your-first-command">getting started / approve your first command</a>
+        <a href="/docs/getting-started/#if-the-command-waits">getting started / if the command waits</a><a href="/docs/getting-started/#what-to-do-next">getting started / what to do next</a>
+      
+    
+      <a href="/docs/rex/">rex support</a>
+      
+        <a href="/docs/rex/#install-the-integration">rex support / install the integration</a>
+        <a href="/docs/rex/#choose-an-owner-profile">rex support / choose an owner profile</a>
+      
+        <a href="/docs/rex/#answer-a-request">rex support / answer a request</a>
+        
+      
+        <a href="/docs/rex/#use-the-command-palette">rex support / use the command palette</a>
+        
+      
+        <a href="/docs/rex/#when-rex-is-unavailable">rex support / when Rex is unavailable</a>
+        <a href="/docs/rex/#troubleshoot-the-connection">rex support / troubleshoot the connection</a>
+      
+        <a href="/docs/rex/#remove-the-integration">rex support / remove the integration</a>
+        
+      
+    
+      <a href="/docs/cli/">cli usage</a>
+      
+        <a href="/docs/cli/#profiles-and-permissions">cli usage / profiles and permissions</a>
+        
+      
+        <a href="/docs/cli/#store-and-allow">cli usage / store and allow</a>
+        <a href="/docs/cli/#environment-variables">cli usage / environment variables</a><a href="/docs/cli/#stdin-and-files">cli usage / stdin and files</a>
+      
+        <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
+        
+      
+        <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
+        
+      
+        <a href="/docs/cli/#import-passwords">cli usage / import passwords</a>
+        
+      
+        <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
+        
+      
+    
+      <a href="/docs/self-hosting/">self-hosting</a>
+      
+        <a href="/docs/self-hosting/#the-local-boundary">self-hosting / the local boundary</a>
+        
+      
+        <a href="/docs/self-hosting/#build-and-run">self-hosting / build and run</a>
+        <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
+      
+        <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#updating">self-hosting / updating</a>
+        
+      
+        <a href="/docs/self-hosting/#connection-problems">self-hosting / connection problems</a>
+        
+      
+    
+      <a href="/docs/setups/">setups</a>
+      
+        <a href="/docs/setups/#a-person-in-a-terminal">setups / a person in a terminal</a>
+        
+      
+        <a href="/docs/setups/#an-agent-with-rex">setups / an agent with Rex</a>
+        <a href="/docs/setups/#give-the-agent-the-instructions">setups / give the agent the instructions</a>
+      
+        <a href="/docs/setups/#an-agent-without-rex">setups / an agent without Rex</a>
+        
+      
+        <a href="/docs/setups/#git-and-ssh-tools">setups / git and SSH tools</a>
+        
+      
+        <a href="/docs/setups/#remove-an-agents-access">setups / remove an agent&#39;s access</a>
+        
+      
+    
+  </div>
+</body>
+</html>

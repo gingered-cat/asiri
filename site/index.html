@@ -19,8 +19,8 @@
   <header>
     <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
     <nav>
-      <a href="#how">how</a>
-      <a href="/skill.md">skill.md</a>
+      <a href="/docs/">docs</a>
+      <a href="#rex">rex</a>
       <a href="https://github.com/gingered-cat/asiri">github</a>
     </nav>
   </header>
@@ -32,7 +32,7 @@
     <p class="prompt" id="prompt">&gt; Read https://asiri.run/skill.md. From now on, ask me through asiri before using any secret, and never print one.</p>
     <div class="actions">
       <button type="button" id="copy" data-copy="prompt">copy prompt</button>
-      <a href="#run">or run the server first</a>
+      <a href="/docs/getting-started/">or set up your vault first</a>
     </div>
   </div>
 
@@ -52,6 +52,14 @@
     <div class="row"><span>01</span><span>store</span><span>You add a secret once. It's typed without echo and sealed in a vault that runs in a container on your machine. <code>asiri ls</code> shows names, never values.</span></div>
     <div class="row"><span>02</span><span>approve</span><span>An agent asks for it by name, with a reason. You answer in Rex, in your terminal, or with <code>asiri approve</code>: once, for 15 minutes, or for an hour.</span></div>
     <div class="row"><span>03</span><span>use</span><span>asiri hands the value to the one program allowed to receive it and scrubs it from the output. The agent gets the result.</span></div>
+  </section>
+
+  <section id="rex" class="quick">
+    <h2>approve without leaving Rex</h2>
+    <p class="sub">Requests appear in Rex's command palette with the secret reference, command, and reason. Allow once, grant a short window, or deny. Your owner profile makes the decision; the agent cannot approve itself.</p>
+    <pre><code>asiri rex install</code></pre>
+    <p class="note">Already have a paired vault and Rex installed? That is the setup command. Rex also gives you a kill switch and a vault lock. Without Rex, terminal approvals still work.</p>
+    <div class="actions"><a href="/docs/rex/">read the Rex setup guide →</a></div>
   </section>
 
   <section class="table">
