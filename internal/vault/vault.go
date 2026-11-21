@@ -120,7 +120,7 @@ func (v *Vault) kdf(ctx context.Context, q interface {
 
 // PutTx stores a new version of ref. An empty kind keeps the previous
 // version's kind (token for a new item).
-func (v *Vault) PutTx(ctx context.Context, tx *sql.Tx, ref domain.Ref, kind domain.Kind, s domain.Secret, now time.Time) (domain.Item, error) {
+func (v *Vault) PutTx(ctx context.Context, tx *sql.Tx, ref domain.Ref, kind domain.Kind, s domain.Secret, publicKey string, now time.Time) (domain.Item, error) {
 	var item domain.Item
 	err := v.kr.with(func(vk []byte) error {
 		var id, oldKind string
@@ -152,15 +152,15 @@ func (v *Vault) PutTx(ctx context.Context, tx *sql.Tx, ref domain.Ref, kind doma
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO items (id, version, vault, name, field, kind, ciphertext, nonce, wrapped_dek, dek_nonce, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, ver, ref.Vault, ref.Name, ref.Field, kind, ct, nonce, wd, dn, now.UnixMilli()); err != nil {
+			`INSERT INTO items (id, version, vault, name, field, kind, ciphertext, nonce, wrapped_dek, dek_nonce, public_key, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, ver, ref.Vault, ref.Name, ref.Field, kind, ct, nonce, wd, dn, publicKey, now.UnixMilli()); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO policies (item_id) VALUES (?)`, id); err != nil {
 			return err
 		}
-		item = domain.Item{ID: domain.ItemID(id), Ref: ref, Kind: kind, Version: ver, UpdatedAt: now.UTC(),
+		item = domain.Item{ID: domain.ItemID(id), Ref: ref, Kind: kind, Version: ver, UpdatedAt: now.UTC(), PublicKey: publicKey,
 			Policy: domain.Policy{Bins: []string{}, SSHHosts: []string{}, MaxGrant: "1h"}}
 		return nil
 	})
@@ -255,7 +255,7 @@ func (v *Vault) List(ctx context.Context, query string) ([]domain.Item, error) {
 
 func (v *Vault) list(ctx context.Context, where string, args ...any) ([]domain.Item, error) {
 	rows, err := v.store.R().QueryContext(ctx, `
-		SELECT i.id, i.vault, i.name, i.field, i.kind, i.version, i.created_at,
+		SELECT i.id, i.vault, i.name, i.field, i.kind, i.version, i.created_at, i.public_key,
 		       COALESCE(p.bins, '[]'), COALESCE(p.ssh_hosts, '[]'), COALESCE(p.max_grant, '1h'),
 		       COALESCE(p.reveal_to_agent, 0)
 		FROM items i
@@ -276,7 +276,7 @@ func (v *Vault) list(ctx context.Context, where string, args ...any) ([]domain.I
 			reveal      int
 		)
 		if err := rows.Scan(&it.ID, &it.Ref.Vault, &it.Ref.Name, &it.Ref.Field, &it.Kind, &it.Version,
-			&created, &bins, &hosts, &it.Policy.MaxGrant, &reveal); err != nil {
+			&created, &it.PublicKey, &bins, &hosts, &it.Policy.MaxGrant, &reveal); err != nil {
 			return nil, err
 		}
 		it.UpdatedAt = time.UnixMilli(created).UTC()

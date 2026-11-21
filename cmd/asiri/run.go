@@ -79,14 +79,7 @@ func runCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return &run.ExitError{Code: run.ExitFailed, Err: err}
 	}
-	// Rex first, then this terminal (owners only: agents can't approve),
-	// then "run asiri approve ID".
-	chain := approve.Chain{approve.Rex{Server: os.Getenv("ASIRI_REX_SERVER"), Out: os.Stderr}}
-	if who, err := c.WhoAmI(ctx); err == nil && who.Role == domain.RoleOwner {
-		chain = append(chain, approve.TTY{})
-	}
-	chain = append(chain, approve.Wait{API: c, Out: os.Stderr})
-	r := &run.Runner{API: c, Approver: chain, Notes: os.Stderr}
+	r := &run.Runner{API: c, Approver: approvers(ctx, c), Notes: os.Stderr}
 	code, err := r.Run(ctx, run.Spec{Bin: rest[0], Args: rest[1:], Deliveries: ds, Reason: *reason,
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	if err != nil {
@@ -100,6 +93,7 @@ func policyCmd(ctx context.Context, args []string) error {
 	profile := profileFlag(fs)
 	bins := fs.String("bins", "", "comma-separated programs that may receive the secret (names or absolute paths)")
 	maxGrant := fs.String("max-grant", "", "longest approval allowed: once, 15m or 1h")
+	sshHosts := fs.String("ssh-hosts", "", "comma-separated hosts an SSH key may sign in to (from known_hosts), or name=SHA256:…")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -121,18 +115,23 @@ func policyCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if set["bins"] || set["max-grant"] {
-		b, mg := it.Policy.Bins, it.Policy.MaxGrant
+	if set["bins"] || set["max-grant"] || set["ssh-hosts"] {
+		p := it.Policy
 		if set["bins"] {
-			b = splitList(*bins)
+			p.Bins = splitList(*bins)
 		}
 		if set["max-grant"] {
-			mg = *maxGrant
+			p.MaxGrant = *maxGrant
 		}
-		if it, err = c.SetPolicy(ctx, ref, b, mg); err != nil {
+		if set["ssh-hosts"] {
+			if p.SSHHosts, err = resolveSSHHosts(ctx, splitList(*sshHosts)); err != nil {
+				return err
+			}
+		}
+		if it, err = c.SetPolicy(ctx, ref, p); err != nil {
 			return err
 		}
-		for _, x := range b {
+		for _, x := range p.Bins {
 			if domain.IsInterpreter(x) {
 				fmt.Fprintf(os.Stderr, "warning: %s can run any code, so it can print or send %s anywhere\n", x, ref)
 			}
@@ -143,6 +142,14 @@ func policyCmd(ctx context.Context, args []string) error {
 }
 
 func printPolicy(it domain.Item) {
+	if it.Kind == domain.KindSSHKey {
+		hosts := "no host yet (asiri policy " + it.Ref.String() + " --ssh-hosts HOST)"
+		if len(it.Policy.SSHHosts) > 0 {
+			hosts = strings.Join(it.Policy.SSHHosts, "\n                  ")
+		}
+		fmt.Printf("%s (ssh key)\n  may sign in to  %s\n  longest grant   %s\n", it.Ref, hosts, it.Policy.MaxGrant)
+		return
+	}
 	bins := "nothing yet (asiri policy " + it.Ref.String() + " --bins gh)"
 	if len(it.Policy.Bins) > 0 {
 		bins = strings.Join(it.Policy.Bins, ", ")

@@ -82,6 +82,7 @@ type CreateRequest struct {
 	Ref       domain.Ref `json:"ref"`
 	BinPath   string     `json:"bin_path"`
 	BinSHA256 string     `json:"bin_sha256"`
+	HostFP    string     `json:"host_fp,omitempty"`
 	Argv      []string   `json:"argv"`
 	Cwd       string     `json:"cwd"`
 	Reason    string     `json:"reason"`
@@ -126,6 +127,23 @@ type PolicyRequest struct {
 	Bins     []string `json:"bins"`
 	SSHHosts []string `json:"ssh_hosts,omitempty"`
 	MaxGrant string   `json:"max_grant,omitempty"`
+}
+
+type GenerateSSHKey struct {
+	Field string `json:"field,omitempty"`
+}
+
+type SSHSignRequest struct {
+	GrantID domain.GrantID `json:"grant_id"`
+	Data    []byte         `json:"data"`
+	Flags   uint32         `json:"flags"`
+}
+
+// SSHSignature is an ssh.Signature on the wire.
+type SSHSignature struct {
+	Format string `json:"format"`
+	Blob   []byte `json:"blob"`
+	Rest   []byte `json:"rest,omitempty"`
 }
 
 type ErrorBody struct {

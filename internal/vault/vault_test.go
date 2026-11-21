@@ -54,7 +54,7 @@ func put(t *testing.T, s *Store, v *Vault, ref string, value string) domain.Item
 	var it domain.Item
 	err = s.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		it, err = v.PutTx(ctx, tx, r, "", domain.NewSecret([]byte(value)), time.Now())
+		it, err = v.PutTx(ctx, tx, r, "", domain.NewSecret([]byte(value)), "", time.Now())
 		return err
 	})
 	if err != nil {

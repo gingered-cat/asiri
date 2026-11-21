@@ -99,7 +99,7 @@ func (r *Runner) Run(ctx context.Context, spec Spec) (int, error) {
 		}
 	}()
 	for _, d := range spec.Deliveries {
-		gid, err := r.grant(ctx, api.CreateRequest{Ref: d.Ref(), BinPath: bin, BinSHA256: sum,
+		gid, err := r.Grant(ctx, api.CreateRequest{Ref: d.Ref(), BinPath: bin, BinSHA256: sum,
 			Argv: spec.Args, Cwd: tildeHome(cwd), Reason: spec.Reason})
 		if err != nil {
 			var ee *ExitError
@@ -162,11 +162,12 @@ func (r *Runner) Run(ctx context.Context, spec Spec) (int, error) {
 	return childExit(waitErr)
 }
 
-// grant returns a grant for req: reused, or approved by a person.
-func (r *Runner) grant(ctx context.Context, req api.CreateRequest) (domain.GrantID, error) {
+// Grant returns a grant for req: reused, or approved by a person. Errors
+// are *ExitError.
+func (r *Runner) Grant(ctx context.Context, req api.CreateRequest) (domain.GrantID, error) {
 	resp, err := r.API.CreateRequest(ctx, req)
 	if err != nil {
-		return "", err
+		return "", &ExitError{exitCode(err), err}
 	}
 	rq := resp.Request
 	if rq.Status == domain.StatusPending {
@@ -185,7 +186,7 @@ func (r *Runner) grant(ctx context.Context, req api.CreateRequest) (domain.Grant
 			}
 		}
 		if err != nil {
-			return "", err
+			return "", &ExitError{exitCode(err), err}
 		}
 	}
 	switch rq.Status {

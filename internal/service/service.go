@@ -133,10 +133,22 @@ func (s *Service) PutItem(ctx context.Context, by domain.Client, ref domain.Ref,
 	if sec.Len() > 64<<10 {
 		return domain.Item{}, domain.Errorf(domain.CodeInvalid, "value is larger than 64 KiB")
 	}
+	if kind == "" {
+		if cur, err := s.vault.Lookup(ctx, ref); err == nil {
+			kind = cur.Kind
+		}
+	}
+	pub := ""
+	if kind == domain.KindSSHKey {
+		var err error
+		if pub, err = sshPublicKey(sec.Reveal(), ref.String()); err != nil {
+			return domain.Item{}, err
+		}
+	}
 	var it domain.Item
 	err := s.store.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		if it, err = s.vault.PutTx(ctx, tx, ref, kind, sec, s.now()); err != nil {
+		if it, err = s.vault.PutTx(ctx, tx, ref, kind, sec, pub, s.now()); err != nil {
 			return err
 		}
 		return audit.Append(ctx, tx, s.now(), domain.AuditEvent{ClientID: by.ID, Event: audit.ItemPut, ItemID: it.ID,

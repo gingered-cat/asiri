@@ -33,6 +33,7 @@ const (
 	Decision     = "decision"
 	Expired      = "request_expired"
 	Redeem       = "redeem"
+	SSHSign      = "ssh_sign"
 	GrantRevoke  = "grant_revoke"
 	RevokeAll    = "revoke_all"
 	ScrubHit     = "scrub_hit"
