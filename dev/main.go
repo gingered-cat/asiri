@@ -27,6 +27,7 @@ func init() {
 	tasks = map[string]task{
 		"docs":  {"build the static docs site (--check to detect stale output)", docsTask},
 		"site":  {"deploy a revision's site/ (default main) to Cloudflare Pages with wrangler", siteTask},
+		"stamp": {"add ?v=VERSION to the site's CSS/JS URLs in DIR's HTML (deploy step)", stampTask},
 		"fmt":   {"fail if any file needs gofmt (-w to rewrite)", fmtTask},
 		"vet":   {"go vet ./...", func([]string) error { return goCmd("vet", "./...") }},
 		"test":  {"go test -race ./...", testTask},
