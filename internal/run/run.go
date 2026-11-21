@@ -146,7 +146,23 @@ func (r *Runner) Run(ctx context.Context, spec Spec) (int, error) {
 			cmd.Process.Signal(s)
 		}
 	}()
+	// A cancelled context (a timeout, an MCP call ending) stops the program:
+	// SIGTERM, then SIGKILL after 3 s.
+	exited := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			cmd.Process.Signal(syscall.SIGTERM)
+			select {
+			case <-exited:
+			case <-time.After(3 * time.Second):
+				cmd.Process.Kill()
+			}
+		case <-exited:
+		}
+	}()
 	waitErr := cmd.Wait()
+	close(exited)
 	signal.Stop(sigs)
 	close(sigs)
 	stdout.Flush()

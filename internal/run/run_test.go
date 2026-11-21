@@ -163,3 +163,15 @@ func TestParseDeliveries(t *testing.T) {
 		t.Error("NUL in env accepted")
 	}
 }
+
+func TestContextStopsProgram(t *testing.T) {
+	f := &fakeAPI{values: map[string]string{"x": "xxxxxxxx"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	r := &Runner{API: f, Approver: yes{}}
+	start := time.Now()
+	code, err := r.Run(ctx, Spec{Bin: "sleep", Args: []string{"30"}, Deliveries: []Delivery{Env{Name: "X", R: ref("dev/x")}}})
+	if err != nil || code != 128+15 || time.Since(start) > 5*time.Second {
+		t.Fatalf("code %d err %v after %s", code, err, time.Since(start))
+	}
+}
