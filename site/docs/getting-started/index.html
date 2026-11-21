@@ -1,0 +1,298 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>getting started · asiri docs</title>
+  <meta name="description" content="Run a local vault, store a token, and approve its use. Run these steps yourself in a terminal. Do not put credentials into an agent conversation.">
+  <link rel="canonical" href="https://asiri.run/docs/getting-started/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/ioskeley-mono-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/docs/docs.v2.css">
+  <link rel="alternate" type="text/markdown" href="/docs/getting-started.md" title="getting started as Markdown">
+  <script src="/docs/docs.js" type="module"></script>
+</head>
+<body class="docs" data-page="getting-started">
+  <a class="skip" href="#content">skip to content</a>
+  <header class="docs-header">
+    <a class="mark" href="/" aria-label="asiri home"><span aria-hidden="true">[</span>asiri<span aria-hidden="true">]</span></a>
+    <a class="docs-label" href="/docs/">field guide</a>
+    <nav aria-label="Site"><a href="/">home</a><a href="https://github.com/gingered-cat/asiri">github ↗</a></nav>
+  </header>
+
+  <div class="docs-layout">
+    <nav class="docs-nav tree" aria-label="Documentation">
+      <details class="nav-root" open>
+        <summary><span class="chevron" aria-hidden="true">›</span> documentation <span class="count">06</span></summary>
+        <div class="nav-groups">
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> begin</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/" data-doc-link data-key="e" >ethos</a></li>
+            
+              <li><a href="/docs/getting-started/" data-doc-link data-key="s" aria-current="page">getting started</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> use</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/rex/" data-doc-link data-key="r" >rex support</a></li>
+            
+              <li><a href="/docs/cli/" data-doc-link data-key="c" >cli usage</a></li>
+            
+            </ul>
+          </details>
+        
+          <details class="nav-group" open>
+            <summary><span class="chevron" aria-hidden="true">›</span> operate</summary>
+            <ul class="branches">
+            
+              <li><a href="/docs/self-hosting/" data-doc-link data-key="h" >self-hosting</a></li>
+            
+              <li><a href="/docs/setups/" data-doc-link data-key="u" >setups</a></li>
+            
+            </ul>
+          </details>
+        
+        </div>
+      </details>
+      <p class="nav-note">your secrets.<br>your permission.</p>
+      <a class="skill-link" href="/skill.md">agent skill ↗</a>
+    </nav>
+
+    <main id="content" tabindex="-1">
+      <div class="page-meta"><span>begin / getting started</span><span>asiri:smol</span></div>
+      <div class="page-actions">
+        <button type="button" id="copy-page" hidden>copy page as markdown <span aria-hidden="true">↗</span></button>
+        <a id="markdown-source" href="/docs/getting-started.md">raw .md</a>
+      </div>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+      <article class="prose"><h1 id="getting-started">getting started</h1>
+<p>Run a local vault, store a token, and approve its use. Run these steps yourself in a terminal. Do not put credentials into an agent conversation.</p>
+<h2 id="before-you-begin">before you begin</h2>
+<p>You need Git, the Go toolchain specified in <code>go.mod</code>, and Docker with Compose. These instructions build from source. They do not assume a published container image or release binary.</p>
+<p>The example uses GitHub CLI (<code>gh</code>). Install and sign in to it first if you want to try that example.</p>
+<h2 id="build-the-cli">build the CLI</h2>
+<p>Clone the repository and build the binary for your machine:</p>
+<pre><code class="language-sh">git clone https://github.com/gingered-cat/asiri.git
+cd asiri
+go run ./dev bin
+export PATH=&quot;$PWD/bin:$PATH&quot;
+</code></pre>
+<p>This PATH change lasts for this terminal session. Keep the binary at a stable path if you install the Rex integration.</p>
+<h2 id="start-the-vault">start the vault</h2>
+<p>Generate a master key. Keep a secure backup of it, separate from your vault backup. Losing the key means losing access to the encrypted secrets.</p>
+<pre><code class="language-sh">asiri server keygen -o ~/.config/asiri/master.key
+</code></pre>
+<p>On native Linux Docker, the container runs as user 65532. Give that user ownership of the key file before starting. Docker Desktop and OrbStack handle the file mount differently and do not need this step.</p>
+<pre><code class="language-sh"># native Linux Docker only
+sudo chown 65532 ~/.config/asiri/master.key
+</code></pre>
+<p>From the repository root, build and start the container:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml up -d --build
+</code></pre>
+<p>The server listens on <code>127.0.0.1:7420</code>. It is not exposed to your network. The Docker volume holds the vault and server identity.</p>
+<h2 id="pair-your-machine">pair your machine</h2>
+<p>Generate a one-time owner pairing code inside the container:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml exec asiri asiri server pair-code
+</code></pre>
+<p>Run the pairing command it prints. If you copy just the code, replace <code>CODE</code> below with it:</p>
+<pre><code class="language-sh">asiri pair --code CODE
+asiri status
+</code></pre>
+<p>The code expires after ten minutes and works once. It includes the server's CA fingerprint. Pairing refuses a different server before it sends the code.</p>
+<h2 id="store-a-secret">store a secret</h2>
+<p>Add a GitHub token through the hidden terminal prompt:</p>
+<pre><code class="language-sh">asiri add dev/github
+asiri ls
+</code></pre>
+<p><code>asiri ls</code> shows names and metadata, never secret values. If <code>gh</code> is already signed in, you can pipe its token directly instead:</p>
+<pre><code class="language-sh">gh auth token | asiri add dev/github --stdin
+</code></pre>
+<h2 id="approve-your-first-command">approve your first command</h2>
+<p>Allow only <code>gh</code> to receive this token. Then ask it to show your GitHub username:</p>
+<pre><code class="language-sh">asiri policy dev/github --bins gh --max-grant 1h
+asiri run --env GH_TOKEN=asiri://dev/github \
+  --reason &quot;show my GitHub username&quot; -- gh api user --jq .login
+</code></pre>
+<p>Approve once when prompted. The program receives the token. Its output passes through asiri's scrubber before it reaches the terminal.</p>
+<h3 id="if-the-command-waits">if the command waits</h3>
+<p>If Rex is available, the request appears there. Otherwise a human-run command can ask in the terminal. An agent request waits for you to run the printed <code>asiri approve ID</code> command in your own terminal.</p>
+<p>Never give an agent your owner profile to remove this step. See <a href="/docs/setups/">setups</a> for a separate agent profile.</p>
+<h3 id="what-to-do-next">what to do next</h3>
+<p>Set up <a href="/docs/rex/">Rex approvals</a> for decisions in your workspace. Read <a href="/docs/cli/">CLI usage</a> for delivery options and <a href="/docs/self-hosting/">self-hosting</a> before changing storage or network access.</p>
+</article>
+      <nav class="page-turn" aria-label="Adjacent pages">
+        <a href="/docs/"><span>← previous</span>ethos</a>
+        <a href="/docs/rex/"><span>next →</span>rex support</a>
+      </nav>
+      <footer class="docs-footer"><span>made for humans + agents</span><a href="https://github.com/gingered-cat/asiri/blob/main/docs/getting-started.md">page source ↗</a></footer>
+    </main>
+
+    <aside class="reading-guide tree" aria-label="Reading guide">
+      <details open>
+        <summary><span class="chevron" aria-hidden="true">›</span> reading guide</summary>
+        <ul class="branches">
+          
+          <li><a href="#before-you-begin">before you begin</a></li>
+          
+          <li><a href="#build-the-cli">build the CLI</a></li>
+          
+          <li><a href="#start-the-vault">start the vault</a></li>
+          
+          <li><a href="#pair-your-machine">pair your machine</a></li>
+          
+          <li><a href="#store-a-secret">store a secret</a></li>
+          
+          <li>
+            <details open>
+              <summary><span class="chevron" aria-hidden="true">›</span> approve your first command</summary>
+              <ul class="branches">
+                <li><a href="#approve-your-first-command">overview</a></li>
+                <li><a href="#if-the-command-waits">if the command waits</a></li><li><a href="#what-to-do-next">what to do next</a></li>
+              </ul>
+            </details>
+          </li>
+          
+        </ul>
+      </details>
+      <p class="guide-note">read it here.<br>take the markdown with you.</p>
+    </aside>
+  </div>
+
+  <button class="command-trigger" id="command-trigger" type="button" aria-haspopup="dialog" aria-controls="commands" hidden><span aria-hidden="true">:</span> commands <kbd>space</kbd></button>
+  <div id="commands" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-help" hidden>
+    <div class="command-head"><span id="command-title">commands</span><button type="button" id="command-close">close</button></div>
+    <p class="command-help" id="command-help">press a key, or choose an action</p>
+    <label class="search-label" for="command-search" hidden>find a page or section</label>
+    <input id="command-search" type="search" placeholder="find a page or section…" autocomplete="off" hidden>
+    <div id="command-list"></div>
+    <p id="command-empty" role="status" hidden>no matches. try “rex” or “pair”.</p>
+    <div class="command-foot"><span id="command-path">space</span><span>↑ ↓ move · enter select</span></div>
+  </div>
+  <div hidden id="search-index">
+    
+      <a href="/docs/">ethos</a>
+      
+        <a href="/docs/#collaboration-with-boundaries">ethos / collaboration, with boundaries</a>
+        <a href="/docs/#the-human-decides">ethos / the human decides</a><a href="/docs/#the-agent-does-the-work">ethos / the agent does the work</a>
+      
+        <a href="/docs/#consent-stays-visible">ethos / consent stays visible</a>
+        
+      
+        <a href="/docs/#trust-has-limits">ethos / trust has limits</a>
+        
+      
+        <a href="/docs/#start-with-one-useful-task">ethos / start with one useful task</a>
+        
+      
+    
+      <a href="/docs/getting-started/">getting started</a>
+      
+        <a href="/docs/getting-started/#before-you-begin">getting started / before you begin</a>
+        
+      
+        <a href="/docs/getting-started/#build-the-cli">getting started / build the CLI</a>
+        
+      
+        <a href="/docs/getting-started/#start-the-vault">getting started / start the vault</a>
+        
+      
+        <a href="/docs/getting-started/#pair-your-machine">getting started / pair your machine</a>
+        
+      
+        <a href="/docs/getting-started/#store-a-secret">getting started / store a secret</a>
+        
+      
+        <a href="/docs/getting-started/#approve-your-first-command">getting started / approve your first command</a>
+        <a href="/docs/getting-started/#if-the-command-waits">getting started / if the command waits</a><a href="/docs/getting-started/#what-to-do-next">getting started / what to do next</a>
+      
+    
+      <a href="/docs/rex/">rex support</a>
+      
+        <a href="/docs/rex/#install-the-integration">rex support / install the integration</a>
+        <a href="/docs/rex/#choose-an-owner-profile">rex support / choose an owner profile</a>
+      
+        <a href="/docs/rex/#answer-a-request">rex support / answer a request</a>
+        
+      
+        <a href="/docs/rex/#use-the-command-palette">rex support / use the command palette</a>
+        
+      
+        <a href="/docs/rex/#when-rex-is-unavailable">rex support / when Rex is unavailable</a>
+        <a href="/docs/rex/#troubleshoot-the-connection">rex support / troubleshoot the connection</a>
+      
+        <a href="/docs/rex/#remove-the-integration">rex support / remove the integration</a>
+        
+      
+    
+      <a href="/docs/cli/">cli usage</a>
+      
+        <a href="/docs/cli/#profiles-and-permissions">cli usage / profiles and permissions</a>
+        
+      
+        <a href="/docs/cli/#store-and-allow">cli usage / store and allow</a>
+        <a href="/docs/cli/#environment-variables">cli usage / environment variables</a><a href="/docs/cli/#stdin-and-files">cli usage / stdin and files</a>
+      
+        <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
+        
+      
+        <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
+        
+      
+        <a href="/docs/cli/#import-passwords">cli usage / import passwords</a>
+        
+      
+        <a href="/docs/cli/#lock-and-audit">cli usage / lock and audit</a>
+        
+      
+        <a href="/docs/cli/#exit-codes">cli usage / exit codes</a>
+        
+      
+    
+      <a href="/docs/self-hosting/">self-hosting</a>
+      
+        <a href="/docs/self-hosting/#the-local-boundary">self-hosting / the local boundary</a>
+        
+      
+        <a href="/docs/self-hosting/#build-and-run">self-hosting / build and run</a>
+        <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
+      
+        <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#updating">self-hosting / updating</a>
+        
+      
+        <a href="/docs/self-hosting/#connection-problems">self-hosting / connection problems</a>
+        
+      
+    
+      <a href="/docs/setups/">setups</a>
+      
+        <a href="/docs/setups/#a-person-in-a-terminal">setups / a person in a terminal</a>
+        
+      
+        <a href="/docs/setups/#an-agent-with-rex">setups / an agent with Rex</a>
+        <a href="/docs/setups/#give-the-agent-the-instructions">setups / give the agent the instructions</a>
+      
+        <a href="/docs/setups/#an-agent-without-rex">setups / an agent without Rex</a>
+        
+      
+        <a href="/docs/setups/#git-and-ssh-tools">setups / git and SSH tools</a>
+        
+      
+        <a href="/docs/setups/#remove-an-agents-access">setups / remove an agent&#39;s access</a>
+        
+      
+    
+  </div>
+</body>
+</html>

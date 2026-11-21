@@ -25,6 +25,7 @@ var tasks map[string]task
 
 func init() {
 	tasks = map[string]task{
+		"docs":  {"build the static docs site (--check to detect stale output)", docsTask},
 		"fmt":   {"fail if any file needs gofmt (-w to rewrite)", fmtTask},
 		"vet":   {"go vet ./...", func([]string) error { return goCmd("vet", "./...") }},
 		"test":  {"go test -race ./...", testTask},
