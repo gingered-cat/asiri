@@ -57,8 +57,8 @@
   <section id="rex" class="quick">
     <h2>approve without leaving Rex</h2>
     <p class="sub">Requests appear in Rex's command palette with the secret reference, command, and reason. Allow once, grant a short window, or deny. Your owner profile makes the decision; the agent cannot approve itself.</p>
-    <pre><code>asiri rex install</code></pre>
-    <p class="note">Already have a paired vault and Rex installed? That is the setup command. Rex also gives you a kill switch and a vault lock. Without Rex, terminal approvals still work.</p>
+    <pre><code>curl -fsSL https://asiri.run/install.sh | sh</code></pre>
+    <p class="note">Installs the <code>v0.1.0</code> binary, checks its checksum, and runs <code>asiri rex install</code> when Rex and an owner profile are already there. Without those, it prints the next command.</p>
     <div class="actions"><a href="/docs/rex/">read the Rex setup guide →</a></div>
   </section>
 
@@ -101,10 +101,11 @@ asiri policy dev/github --bins gh --max-grant 1h</code></pre>
     <div class="grid links">
       <div class="row"><span>skill</span><a href="/skill.md">https://asiri.run/skill.md</a><span>read this first</span></div>
       <div class="row"><span>cli</span><span>asiri run · asiri ssh · asiri ls</span><span>today</span></div>
-      <div class="row"><span>mcp</span><span>an MCP server</span><span>next</span></div>
+      <div class="row"><span>mcp</span><span>asiri mcp · list_secrets · run_with_secrets · ssh_run</span><span>today</span></div>
+      <div class="row"><span>install</span><a href="/install.sh">curl -fsSL https://asiri.run/install.sh | sh</a><span>binary + Rex plugin</span></div>
       <div class="row"><span>source</span><a href="https://github.com/gingered-cat/asiri">github.com/gingered-cat/asiri</a><span>apache-2.0</span></div>
     </div>
-    <p class="note"><b>v0.1 in progress.</b> Works today: the encrypted vault, pairing, <code>asiri run</code>, approvals from Rex or the terminal, SSH keys that sign inside the server, and importing from Apple Passwords and Google Password Manager. Next: the MCP server.</p>
+    <p class="note"><b>v0.1.0.</b> The encrypted vault, pairing, <code>asiri run</code>, approvals from Rex or the terminal, SSH keys that sign inside the server, importing from Apple Passwords and Google Password Manager, and the MCP server. <a href="https://github.com/gingered-cat/asiri/releases/tag/v0.1.0">release notes</a></p>
   </section>
 
   <footer>

@@ -7,8 +7,14 @@ Approve an agent's request without leaving your workspace. asiri integrates with
 First finish [getting started](/docs/getting-started/). You need a paired owner profile, a built asiri binary at a stable path, and the Rex CLI on PATH.
 
 ```sh
-asiri rex install
+curl -fsSL https://asiri.run/install.sh | sh
 asiri rex status
+```
+
+The script installs the release binary and then runs `asiri rex install` when Rex and an owner profile are already present. If either is missing, run the plugin step yourself after pairing:
+
+```sh
+asiri rex install
 ```
 
 The installer adds asiri's marked block to Rex's `init.lua`. It runs `rex config check` and restores the previous configuration if validation fails. It reloads Rex when possible. If Rex is not running, start it to load the integration.
