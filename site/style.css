@@ -83,6 +83,16 @@ h2 { font-size: 16px; line-height: 24px; padding-bottom: 16px; }
 .note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; line-height: 20px; color: var(--mute); }
 .note b, .note code { color: var(--ink); }
 
+/* the github mark, with ascii stars twinkling around it */
+.star { display: grid; grid-template-columns: auto 1fr; gap: 32px; align-items: center; }
+.sky { margin: 0; }
+.gh { font: inherit; font-size: 11px; line-height: 1.1; letter-spacing: 0; color: var(--ink); white-space: pre; }
+.gh .on { color: var(--accent); }
+.star-text .sub { padding-top: 0; }
+.count { padding-top: 16px; font-size: 13px; }
+.count a { color: var(--accent); }
+.count .on { font-weight: 700; }
+
 footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 120px; padding-top: 16px; border-top: 1px solid var(--line);
   font-size: 12px; line-height: 16px; color: var(--mute); }
 footer nav { gap: 20px; font-size: 12px; line-height: 16px; }
@@ -96,6 +106,7 @@ footer nav { gap: 20px; font-size: 12px; line-height: 16px; }
   .steps .row span:last-child { grid-column: 2; }
   .links .row { grid-template-columns: 64px 1fr; }
   .links .row > :last-child { display: none; }
+  .star { grid-template-columns: 1fr; gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .log li, button { transition: none; }
