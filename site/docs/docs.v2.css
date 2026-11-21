@@ -29,7 +29,8 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .branches { border-left: 1px solid var(--line); margin: 4px 0 12px 4px; padding-left: 16px; }
 .branches > li { position: relative; }
 .branches > li::before { content: ""; position: absolute; left: -17px; top: 16px; width: 8px; border-top: 1px solid var(--line); }
-.branches a { display: block; padding: 5px 8px; margin-left: -4px; color: var(--mute); border-radius: 2px; }
+.branches a { display: block; padding: 5px 8px; margin-left: -4px; color: var(--mute); border-radius: 2px;
+  transition: color var(--docs-fast) ease-out, background-color var(--docs-reveal) ease-out; }
 .branches a[aria-current] { color: var(--accent); background: var(--tint); }
 .count { margin-left: auto; color: var(--mute); font-size: 10px; }
 .docs-nav { position: sticky; top: 32px; display: block; max-height: calc(100svh - 64px); overflow-y: auto; padding-right: 8px; }
@@ -57,7 +58,7 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .prose { font-size: 14px; line-height: 26px; overflow-wrap: anywhere; }
 .prose h1 { margin: 24px 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.25; letter-spacing: -0.04em; max-width: 22ch; text-wrap: balance; }
 .prose h1 + p { font-size: 16px; line-height: 28px; color: var(--ink); margin-bottom: 24px; }
-.prose h2 { margin: 52px 0 16px; padding: 20px 0 0; border-top: 1px solid var(--line); font-size: 17px; line-height: 26px; font-weight: 400; color: var(--ink); }
+.prose h2 { position: relative; margin: 52px 0 16px; padding: 20px 0 0; border-top: 1px solid var(--line); font-size: 17px; line-height: 26px; font-weight: 400; color: var(--ink); }
 .prose h3 { font-size: 14px; margin: 28px 0 12px; font-weight: 700; color: var(--ink); }
 .prose h2, .prose h3 { scroll-margin-top: 24px; }
 .prose p, .prose li { color: var(--mute); }
@@ -74,7 +75,28 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .prose ul, .prose ol { padding-left: 24px; margin: 16px 0; }
 .page-turn { display: flex; justify-content: space-between; gap: 24px; border-top: 1px solid var(--line); padding-top: 24px; margin-top: 64px; color: var(--ink); font-size: 13px; }
 .page-turn a:last-child { text-align: right; }
-.page-turn span { display: block; color: var(--mute); font-size: 10px; margin-bottom: 12px; }
+.page-turn span { display: block; color: var(--mute); font-size: 10px; margin-bottom: 12px; transition: transform var(--docs-reveal) var(--docs-ease), color var(--docs-fast) ease-out; }
+.page-turn a:first-child:hover span { transform: translateX(-3px); color: var(--accent); }
+.page-turn a:last-child:hover span { transform: translateX(3px); color: var(--accent); }
+
+/* Scroll motion stays out of the way of reading: nothing here hides or moves text. */
+.read-progress { position: fixed; inset: 0 0 auto 0; height: 2px; z-index: 20; pointer-events: none; background: var(--accent);
+  transform-origin: 0 50%; transform: scaleX(var(--read, 0)); }
+@supports (animation-timeline: scroll()) {
+  .read-progress.css-driven { animation: read-progress linear both; animation-timeline: scroll(root block); }
+}
+@keyframes read-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* A section's rule is drawn once in red as it arrives, then fades back to a hairline. */
+.prose h2::before { content: ""; position: absolute; top: -1px; left: 0; right: 0; height: 1px; background: var(--accent);
+  transform: scaleX(0); transform-origin: 0 50%; opacity: 0; }
+.prose h2.arrived::before { animation: rule-sweep 1100ms var(--docs-ease) both; }
+@keyframes rule-sweep { 0% { transform: scaleX(0); opacity: 1; } 55% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+/* Arriving by link: the heading lights instantly, then fades. */
+.prose :is(h2, h3):target { animation: target-flash 1400ms ease-out; }
+@keyframes target-flash { from { background: var(--tint); box-shadow: -12px 0 0 var(--tint), 12px 0 0 var(--tint); } to { background: transparent; box-shadow: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.docs) { scroll-behavior: smooth; }
+}
 .docs-footer { margin-top: 64px; font-size: 10px; line-height: 20px; flex-wrap: wrap; }
 
 /* A which-key style panel, anchored to the command button, not the viewport center. */
