@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1–M6 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`, SSH keys that sign inside the server, Apple/Google CSV import, MCP server and agent skill); next is the v0.1 release. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: v0.1.0. M1–M6 are on `main`: vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, Rex approvals, host-bound SSH keys, Apple/Google CSV import, MCP server and agent skill. Release assets come from the `v0.1.0` tag. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
