@@ -67,10 +67,11 @@ function markSection() {
   scrollQueued = false;
 }
 
-// Each section's rule is drawn once, in red, as it arrives on screen.
+// Each section's rule is drawn in red as it arrives on screen, and again
+// whenever it comes back after leaving.
 if (!reduced) {
   const arrive = new IntersectionObserver((entries) => {
-    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('arrived'); arrive.unobserve(e.target); }
+    for (const e of entries) e.target.classList.toggle('arrived', e.isIntersecting);
   }, { rootMargin: '0px 0px -20% 0px' });
   document.querySelectorAll('.prose h2').forEach((h) => arrive.observe(h));
 }
