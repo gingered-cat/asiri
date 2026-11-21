@@ -1,0 +1,52 @@
+name: site
+
+# Deploys site/ to the Cloudflare Pages project "asiri" (asiri.run) whenever
+# main changes the site or its docs. Needs the repository secret
+# CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit) and the variable
+# CLOUDFLARE_ACCOUNT_ID. Without the token the job says so and skips.
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/**", "dev/docs.go", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Docs are built from their sources
+        run: go run ./dev docs --check
+      - name: No token
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping the deploy. See .github/workflows/site.yml."
+      - name: Deploy to Cloudflare Pages
+        if: env.HAS_TOKEN == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name asiri --branch main --commit-hash ${{ github.sha }} --commit-message "main ${{ github.sha }}"
+      - name: Check asiri.run serves this commit's install.sh
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL https://asiri.run/install.sh | cmp -s - site/install.sh; then
+              echo "asiri.run/install.sh matches this commit"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::asiri.run/install.sh doesn't match site/install.sh after deploying"; exit 1
