@@ -54,6 +54,8 @@ func init() {
 		"approve":   {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
 		"deny":      {"deny ID", "deny a waiting request", denyCmd},
 		"grants":    {"grants", "list live grants", grantsCmd},
+		"mcp":       {"mcp [--profile NAME]", "MCP server on stdio for an agent (claude mcp add asiri -- asiri mcp --profile claude)", mcpCmd},
+		"skill":     {"skill", "print the agent skill (SKILL.md) that teaches agents to use asiri", skillCmd},
 		"import":    {"import FILE [--vault NAME] [--dry-run] [--keep]", "import an Apple Passwords or Google Password Manager CSV export, then delete it", importCmd},
 		"ssh":       {"ssh [--reason TEXT] [--] SSH-ARGS...", "ssh with an asiri key that never leaves the server", sshCmd},
 		"ssh-agent": {"ssh-agent [--socket PATH]", "run an ssh agent backed by asiri (for git, rsync, …)", sshAgentCmd},

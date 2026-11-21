@@ -4,7 +4,7 @@ Run a local vault, store a token, and approve its use. Run these steps yourself 
 
 ## before you begin
 
-You need Git, the Go toolchain specified in `go.mod`, and Docker with Compose. These instructions build from source. They do not assume a published container image or release binary.
+You need Docker with Compose. A release binary is at https://github.com/gingered-cat/asiri/releases/latest. Building from source also needs Git and the Go toolchain in `go.mod`.
 
 The example uses GitHub CLI (`gh`). Install and sign in to it first if you want to try that example.
 

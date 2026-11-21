@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`, SSH keys that sign inside the server and only for the hosts you allow, and importing from Apple Passwords and Google Password Manager. Next: the MCP server and the agent skill. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1.0.** Encrypted vault, pairing, `asiri run`, Rex approvals, host-bound SSH keys, Apple and Google CSV import, and an MCP server with an agent skill. Binaries and the container image are published from the `v0.1.0` tag. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -128,6 +128,25 @@ Imported logins can't be used by anything until you allow a program: `asiri poli
 
 After importing, asiri overwrites and deletes the file, and tells you if it sat in a folder that iCloud Drive, Dropbox, Google Drive or OneDrive syncs (remove it there too), or if Time Machine may have backed it up. On SSDs and APFS, deleted data can linger until the space is reused: FileVault is what protects it. `--keep` keeps the file.
 
+## 08 hand it to your agent
+
+Give the agent its own profile, then its MCP server and skill:
+
+```sh
+asiri clients add claude && asiri pair --profile claude --code <code>
+claude mcp add asiri -- asiri mcp --profile claude          # Claude Code; other MCP clients: command `asiri mcp`
+mkdir -p ~/.claude/skills/asiri && asiri skill > ~/.claude/skills/asiri/SKILL.md
+```
+
+| tool | does |
+|---|---|
+| `list_secrets` | references, kinds, allowed programs and SSH hosts; never values |
+| `run_with_secrets` | runs one program (no shell) with secrets as env, stdin or one-time files; returns exit code and scrubbed output |
+| `ssh_run` | runs a command over ssh with an asiri key |
+| `request_missing_secret` | asks you to `asiri add` a secret it needs, and waits for it |
+
+There is no tool that returns a value. Approvals go to Rex; without Rex the call waits and its notes say `asiri approve <ID>`. The skill tells the agent the rules: never ask for a secret in the chat, use references, give a reason, call the real program instead of a shell, take a denial as final.
+
 ## give an agent its own profile
 
 ```sh
@@ -144,6 +163,7 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 | `asiri rex install` / `uninstall` / `status` | approvals in Rex's command palette |
 | `asiri ssh ARGS` / `asiri ssh-agent` / `asiri pubkey REF` | ssh with an asiri key / an agent socket / the public key |
 | `asiri import FILE [--dry-run] [--keep] [--vault V]` | import an Apple Passwords or Google Password Manager export |
+| `asiri mcp` / `asiri skill` | MCP server on stdio for an agent / print the agent skill |
 | `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |
