@@ -1,10 +1,11 @@
 #!/bin/sh
 # Install asiri, then add it to Rex's command palette.
 # curl -fsSL https://asiri.run/install.sh | sh
+# Later: asiri update. Pick a version with ASIRI_VERSION=v0.1.0.
 set -eu
 
 repo="gingered-cat/asiri"
-version="${ASIRI_VERSION:-v0.1.0}"
+version="${ASIRI_VERSION:-}"
 dest="${HOME}/.local/bin"
 bin="${dest}/asiri"
 
@@ -23,6 +24,16 @@ case "$arch" in
   arm64|aarch64) arch=arm64 ;;
   x86_64|amd64) arch=amd64 ;;
   *) die "$arch is not supported." ;;
+esac
+
+if [ -z "$version" ]; then
+  version=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" |
+    sed -n 's/.*"tag_name": *"\(v[0-9][0-9.]*\)".*/\1/p' | head -n 1) || true
+  [ -n "$version" ] || die "couldn't find the latest release; set ASIRI_VERSION=v0.1.0 to pick one"
+fi
+case "$version" in
+  v[0-9]*.[0-9]*.[0-9]*) ;;
+  *) die "version ${version}: want a tag like v0.1.0" ;;
 esac
 
 name="asiri-${version}-${os}-${arch}"
