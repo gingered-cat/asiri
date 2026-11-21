@@ -40,24 +40,27 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"server":  {"server <init|run|keygen|pair-code|health> ...", "run or set up the server (in the container)", serverCmd},
-		"pair":    {"pair --code CODE [--server URL] [--profile P] [--force]", "pair this machine with a server", pairCmd},
-		"add":     {"add REF [--kind K] [--stdin]", "store a secret (typed without echo, or from stdin)", addCmd},
-		"ls":      {"ls [QUERY] [--json]", "list secrets (names only, never values)", lsCmd},
-		"status":  {"status", "show the profile, server and lock state", statusCmd},
-		"unlock":  {"unlock", "unlock the vault", unlockCmd},
-		"lock":    {"lock", "lock the vault now", lockCmd},
-		"clients": {"clients <add NAME [--role R] [--replace] | ls | revoke NAME>", "manage paired clients", clientsCmd},
-		"log":     {"log [--since N] [--limit N] [--json] | log verify", "read or verify the audit log", logCmd},
-		"run":     {"run [--env NAME=REF]... [--stdin REF] [--file NAME=REF]... [--reason TEXT] [--] PROGRAM [ARGS...]", "run a program with secrets it can use but you never see", runCmd},
-		"policy":  {"policy REF [--bins a,b] [--max-grant once|15m|1h]", "show or set which programs may use a secret", policyCmd},
-		"approve": {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
-		"deny":    {"deny ID", "deny a waiting request", denyCmd},
-		"grants":  {"grants", "list live grants", grantsCmd},
-		"pending": {"pending [--json]", "list requests waiting for approval", pendingCmd},
-		"rex":     {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
-		"revoke":  {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
-		"version": {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
+		"server":    {"server <init|run|keygen|pair-code|health> ...", "run or set up the server (in the container)", serverCmd},
+		"pair":      {"pair --code CODE [--server URL] [--profile P] [--force]", "pair this machine with a server", pairCmd},
+		"add":       {"add REF [--kind K] [--stdin]", "store a secret (typed without echo, or from stdin)", addCmd},
+		"ls":        {"ls [QUERY] [--json]", "list secrets (names only, never values)", lsCmd},
+		"status":    {"status", "show the profile, server and lock state", statusCmd},
+		"unlock":    {"unlock", "unlock the vault", unlockCmd},
+		"lock":      {"lock", "lock the vault now", lockCmd},
+		"clients":   {"clients <add NAME [--role R] [--replace] | ls | revoke NAME>", "manage paired clients", clientsCmd},
+		"log":       {"log [--since N] [--limit N] [--json] | log verify", "read or verify the audit log", logCmd},
+		"run":       {"run [--env NAME=REF]... [--stdin REF] [--file NAME=REF]... [--reason TEXT] [--] PROGRAM [ARGS...]", "run a program with secrets it can use but you never see", runCmd},
+		"policy":    {"policy REF [--bins a,b] [--max-grant once|15m|1h]", "show or set which programs may use a secret", policyCmd},
+		"approve":   {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
+		"deny":      {"deny ID", "deny a waiting request", denyCmd},
+		"grants":    {"grants", "list live grants", grantsCmd},
+		"ssh":       {"ssh [--reason TEXT] [--] SSH-ARGS...", "ssh with an asiri key that never leaves the server", sshCmd},
+		"ssh-agent": {"ssh-agent [--socket PATH]", "run an ssh agent backed by asiri (for git, rsync, …)", sshAgentCmd},
+		"pubkey":    {"pubkey REF", "print an SSH key's public key", pubkeyCmd},
+		"pending":   {"pending [--json]", "list requests waiting for approval", pendingCmd},
+		"rex":       {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
+		"revoke":    {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
+		"version":   {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}
 }
 
@@ -113,7 +116,7 @@ func usage(w io.Writer) {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		fmt.Fprintf(w, "  asiri %-8s %s\n", n, commands[n].help)
+		fmt.Fprintf(w, "  asiri %-10s %s\n", n, commands[n].help)
 	}
 	fmt.Fprint(w, "\nprofiles: --profile NAME or ASIRI_PROFILE (default owner); config in $ASIRI_HOME (~/.config/asiri)\n")
 }

@@ -223,10 +223,28 @@ func HealthInsecure(ctx context.Context, server string) (api.Health, error) {
 	return h, call(ctx, newHTTP(tc), "GET", strings.TrimRight(server, "/")+"/v1/health", nil, &h)
 }
 
-func (c *Client) SetPolicy(ctx context.Context, ref domain.Ref, bins []string, maxGrant string) (domain.Item, error) {
+// SetPolicy replaces ref's policy.
+func (c *Client) SetPolicy(ctx context.Context, ref domain.Ref, p domain.Policy) (domain.Item, error) {
 	var r api.ItemResponse
 	path := "/v1/items/" + url.PathEscape(ref.Vault) + "/" + url.PathEscape(ref.Name) + "/policy"
-	return r.Item, c.do(ctx, "PUT", path, api.PolicyRequest{Field: ref.Field, Bins: bins, MaxGrant: maxGrant}, &r)
+	return r.Item, c.do(ctx, "PUT", path, api.PolicyRequest{Field: ref.Field, Bins: p.Bins, SSHHosts: p.SSHHosts, MaxGrant: p.MaxGrant}, &r)
+}
+
+// GenerateSSHKey makes an Ed25519 key inside the server.
+func (c *Client) GenerateSSHKey(ctx context.Context, ref domain.Ref) (domain.Item, error) {
+	var r api.ItemResponse
+	path := "/v1/items/" + url.PathEscape(ref.Vault) + "/" + url.PathEscape(ref.Name) + "/ssh-key"
+	return r.Item, c.do(ctx, "POST", path, api.GenerateSSHKey{Field: ref.Field}, &r)
+}
+
+func (c *Client) SSHKeys(ctx context.Context) ([]domain.Item, error) {
+	var r api.ItemsResponse
+	return r.Items, c.do(ctx, "GET", "/v1/ssh/keys", nil, &r)
+}
+
+func (c *Client) SSHSign(ctx context.Context, gid domain.GrantID, data []byte, flags uint32) (api.SSHSignature, error) {
+	var r api.SSHSignature
+	return r, c.do(ctx, "POST", "/v1/ssh/sign", api.SSHSignRequest{GrantID: gid, Data: data, Flags: flags}, &r)
 }
 
 func (c *Client) CreateRequest(ctx context.Context, req api.CreateRequest) (api.RequestResponse, error) {

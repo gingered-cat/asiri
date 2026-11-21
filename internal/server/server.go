@@ -55,6 +55,9 @@ func New(svc *service.Service, log *slog.Logger) *Server {
 	s.handle("POST /v1/grants/{id}/scrub", anyone, s.scrub)
 	s.handle("POST /v1/grants/{id}/revoke", owner, s.revokeGrant)
 	s.handle("POST /v1/revoke-all", owner, s.revokeAll)
+	s.handle("POST /v1/items/{vault}/{name}/ssh-key", owner, s.generateSSHKey)
+	s.handle("GET /v1/ssh/keys", anyone, s.sshKeys)
+	s.handle("POST /v1/ssh/sign", anyone, s.sshSign)
 	return s
 }
 
@@ -356,7 +359,7 @@ func (s *Server) createRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, reused, err := s.svc.CreateRequest(r.Context(), clientFrom(r.Context()), service.RequestInput{
-		Ref: req.Ref, BinPath: req.BinPath, BinSHA256: req.BinSHA256, Argv: req.Argv, Cwd: req.Cwd, Reason: req.Reason})
+		Ref: req.Ref, BinPath: req.BinPath, BinSHA256: req.BinSHA256, HostFP: req.HostFP, Argv: req.Argv, Cwd: req.Cwd, Reason: req.Reason})
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -451,4 +454,50 @@ func (s *Server) revokeAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, api.RevokeAllResponse{Revoked: n})
+}
+
+func (s *Server) generateSSHKey(w http.ResponseWriter, r *http.Request) {
+	var req api.GenerateSSHKey
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	field := req.Field
+	if field == "" {
+		field = domain.DefaultField
+	}
+	ref, err := domain.ParseRef(r.PathValue("vault") + "/" + r.PathValue("name") + "/" + field)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	it, err := s.svc.GenerateSSHKey(r.Context(), clientFrom(r.Context()), ref)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.ItemResponse{Item: it})
+}
+
+func (s *Server) sshKeys(w http.ResponseWriter, r *http.Request) {
+	items, err := s.svc.SSHKeys(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.ItemsResponse{Items: items})
+}
+
+func (s *Server) sshSign(w http.ResponseWriter, r *http.Request) {
+	var req api.SSHSignRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	sig, err := s.svc.SSHSign(r.Context(), clientFrom(r.Context()), req.GrantID, req.Data, req.Flags)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.SSHSignature{Format: sig.Format, Blob: sig.Blob, Rest: sig.Rest})
 }

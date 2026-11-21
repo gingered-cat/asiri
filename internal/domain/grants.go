@@ -93,6 +93,7 @@ type Request struct {
 	Ref        Ref           `json:"ref"`
 	ItemID     ItemID        `json:"item_id"`
 	BinPath    string        `json:"bin_path"`
+	HostFP     string        `json:"host_fp,omitempty"` // SSH requests: the destination's host key
 	Argv       string        `json:"argv"`
 	Cwd        string        `json:"cwd"`
 	Reason     string        `json:"reason"`
@@ -115,6 +116,7 @@ type Grant struct {
 	ItemID     ItemID     `json:"item_id"`
 	Ref        Ref        `json:"ref"`
 	BinPath    string     `json:"bin_path"`
+	HostFP     string     `json:"host_fp,omitempty"`
 	Decision   Decision   `json:"decision"`
 	Method     Method     `json:"method"`
 	UsesLeft   *int       `json:"uses_left,omitempty"` // nil for timed grants
@@ -171,4 +173,19 @@ func BinAllowed(bins []string, path string) bool {
 		}
 	}
 	return false
+}
+
+// SSHHostAllowed reports whether a policy's ssh_hosts names the host key
+// fingerprint fp, and returns the entry's label.
+func SSHHostAllowed(hosts []string, fp string) (string, bool) {
+	for _, h := range hosts {
+		name, f, ok := strings.Cut(h, "=")
+		if !ok {
+			name, f = "", h
+		}
+		if f == fp {
+			return name, true
+		}
+	}
+	return "", false
 }

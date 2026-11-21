@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`. Next: SSH, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`, and SSH keys that sign inside the server and only for the hosts you allow. Next: password import, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -91,6 +91,26 @@ asiri: waiting for approval (until 17:07:42). in your terminal, run:
   asiri approve 01M7WV9QAXVYMTM68PR5WQA8SW
 ```
 
+## 06 ssh without handing out the key
+
+```sh
+asiri add ops/staging --ssh-generate --ssh-hosts staging    # the key is made inside the server
+ssh staging 'cat >> ~/.ssh/authorized_keys' <<< "$(asiri pubkey ops/staging)"
+asiri ssh staging -- ./deploy.sh
+```
+
+`--ssh-hosts staging` reads staging's host key from your `known_hosts` (after `~/.ssh/config`), so the key can only sign in to that machine. Each login is approved like any other request (Rex, the terminal, or `asiri approve`). The private key never leaves the asiri server: the server signs.
+
+For git, rsync and anything else that uses an agent:
+
+```sh
+asiri ssh-agent                              # in its own pane; serves ~/.asiri/agent.sock
+export SSH_AUTH_SOCK=~/.asiri/agent.sock     # elsewhere (or IdentityAgent in ~/.ssh/config)
+git push
+```
+
+asiri's agent refuses: hosts not in `--ssh-hosts` (the key isn't even offered), signing anything that isn't a login to the host ssh is connected to (`ssh-keygen -Y sign`, commit signing), agent forwarding, and `ssh-add`. It needs OpenSSH 8.9 or newer, which tells the agent which host it's signing in to. An existing key can be imported with `asiri add ops/old --kind ssh_key --stdin < ~/.ssh/id_ed25519`; it must not have a passphrase, since asiri now protects it.
+
 ## give an agent its own profile
 
 ```sh
@@ -105,6 +125,7 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 |---|---|
 | `asiri approve [ID] [--for 15m]` / `asiri deny ID` / `asiri pending` | answer waiting requests / list them |
 | `asiri rex install` / `uninstall` / `status` | approvals in Rex's command palette |
+| `asiri ssh ARGS` / `asiri ssh-agent` / `asiri pubkey REF` | ssh with an asiri key / an agent socket / the public key |
 | `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |

@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/pem"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/gingered-cat/asiri/internal/api"
 	"github.com/gingered-cat/asiri/internal/client"
@@ -264,10 +269,10 @@ func TestGrantLifecycle(t *testing.T) {
 	if _, err := agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh")); code(err) != domain.CodeNotAllowed {
 		t.Fatalf("no policy: %v", err)
 	}
-	if _, err := agent.SetPolicy(ctx, ref, []string{"gh"}, "15m"); code(err) != domain.CodeNotAllowed {
+	if _, err := agent.SetPolicy(ctx, ref, domain.Policy{Bins: []string{"gh"}, MaxGrant: "15m"}); code(err) != domain.CodeNotAllowed {
 		t.Fatalf("agent set policy: %v", err)
 	}
-	if _, err := owner.SetPolicy(ctx, ref, []string{"gh"}, "15m"); err != nil {
+	if _, err := owner.SetPolicy(ctx, ref, domain.Policy{Bins: []string{"gh"}, MaxGrant: "15m"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := agent.CreateRequest(ctx, ghRequest(ref, "/bin/sh", "-c", "echo $GH_TOKEN")); code(err) != domain.CodeInterpreter {
@@ -416,7 +421,7 @@ func TestRateLimit(t *testing.T) {
 	agent := e.pair(t, "claude", domain.RoleAgent)
 	ref, _ := domain.ParseRef("dev/x")
 	owner.PutItem(ctx, ref, "", domain.NewSecret([]byte("xxxxxxxx")))
-	owner.SetPolicy(ctx, ref, []string{"gh"}, "")
+	owner.SetPolicy(ctx, ref, domain.Policy{Bins: []string{"gh"}})
 	var last error
 	for range 11 {
 		_, last = agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh"))
@@ -427,5 +432,89 @@ func TestRateLimit(t *testing.T) {
 	evs, _ := owner.Audit(ctx, 0, 1000)
 	if evs[len(evs)-1].Event != "anomaly" {
 		t.Fatalf("last event %s", evs[len(evs)-1].Event)
+	}
+}
+
+func TestSSHKeys(t *testing.T) {
+	e := setup(t)
+	owner := e.pair(t, "owner", domain.RoleOwner)
+	agent := e.pair(t, "claude", domain.RoleAgent)
+	ref, _ := domain.ParseRef("ops/staging")
+
+	it, err := owner.GenerateSSHKey(ctx, ref)
+	if err != nil || it.Kind != domain.KindSSHKey || !strings.HasPrefix(it.PublicKey, "ssh-ed25519 ") {
+		t.Fatalf("generate = %+v, %v", it, err)
+	}
+	pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(it.PublicKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agent.GenerateSSHKey(ctx, ref); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("agent generate: %v", err)
+	}
+	hostA := "SHA256:" + strings.Repeat("A", 43)
+	hostB := "SHA256:" + strings.Repeat("B", 43)
+	sshReq := func(fp string) api.CreateRequest {
+		return api.CreateRequest{Ref: ref, BinPath: "ssh", HostFP: fp, Reason: "deploy"}
+	}
+
+	if _, err := agent.CreateRequest(ctx, sshReq(hostA)); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("no hosts yet: %v", err)
+	}
+	if _, err := owner.SetPolicy(ctx, ref, domain.Policy{SSHHosts: []string{"bad entry"}}); code(err) != domain.CodeInvalid {
+		t.Fatalf("bad host entry: %v", err)
+	}
+	if _, err := owner.SetPolicy(ctx, ref, domain.Policy{SSHHosts: []string{"staging=" + hostA}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agent.CreateRequest(ctx, sshReq(hostB)); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("unlisted host: %v", err)
+	}
+	// The SSH key can't go through asiri run.
+	if _, err := agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh")); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("ssh key via run: %v", err)
+	}
+
+	resp, err := agent.CreateRequest(ctx, sshReq(hostA))
+	if err != nil || resp.Request.Status != domain.StatusPending || !strings.Contains(resp.Request.Detail, "ssh sign-in to staging (SHA256:AAAAAAA") {
+		t.Fatalf("request = %+v, %v", resp, err)
+	}
+	g, err := owner.Decide(ctx, resp.Request.ID, domain.Decide15m, domain.MethodCLI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("pretend userauth data")
+	sig, err := agent.SSHSign(ctx, g.GrantID, data, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pub.Verify(data, &ssh.Signature{Format: sig.Format, Blob: sig.Blob}); err != nil {
+		t.Fatalf("signature doesn't verify: %v", err)
+	}
+	// Never handed out, even with a live grant.
+	if _, sec, err := agent.Redeem(ctx, g.GrantID); code(err) != domain.CodeNotAllowed || sec.Len() != 0 {
+		t.Fatalf("redeem ssh grant: %v", err)
+	}
+	// Reused for the same host within 15m; a new request for another host is refused by policy.
+	if again, err := agent.CreateRequest(ctx, sshReq(hostA)); err != nil || !again.Reused {
+		t.Fatalf("reuse: %+v %v", again, err)
+	}
+	if keys, err := agent.SSHKeys(ctx); err != nil || len(keys) != 1 || keys[0].PublicKey != it.PublicKey {
+		t.Fatalf("keys = %+v, %v", keys, err)
+	}
+
+	// Importing: a real key is accepted, junk isn't.
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	block, _ := ssh.MarshalPrivateKey(priv, "")
+	imp, _ := domain.ParseRef("ops/imported")
+	if it, err := owner.PutItem(ctx, imp, domain.KindSSHKey, domain.NewSecret(pem.EncodeToMemory(block))); err != nil || it.PublicKey == "" {
+		t.Fatalf("import = %+v, %v", it, err)
+	}
+	if _, err := owner.PutItem(ctx, imp, domain.KindSSHKey, domain.NewSecret([]byte("not a key at all"))); code(err) != domain.CodeInvalid {
+		t.Fatalf("junk key: %v", err)
+	}
+	enc, _ := ssh.MarshalPrivateKeyWithPassphrase(priv, "", []byte("pw"))
+	if _, err := owner.PutItem(ctx, imp, domain.KindSSHKey, domain.NewSecret(pem.EncodeToMemory(enc))); code(err) != domain.CodeInvalid {
+		t.Fatalf("passphrase key: %v", err)
 	}
 }

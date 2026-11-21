@@ -37,7 +37,9 @@ func (r Role) Valid() bool { return r == RoleOwner || r == RoleAgent }
 
 // Policy limits where an item's value may go.
 type Policy struct {
-	Bins          []string `json:"bins"`
+	Bins []string `json:"bins"`
+	// SSHHosts are the hosts an ssh_key may sign in to, as "name=SHA256:…"
+	// host-key fingerprints (the name is only a label).
 	SSHHosts      []string `json:"ssh_hosts"`
 	MaxGrant      string   `json:"max_grant"`
 	RevealToAgent bool     `json:"reveal_to_agent"`
@@ -51,6 +53,7 @@ type Item struct {
 	Version   int       `json:"version"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Policy    Policy    `json:"policy"`
+	PublicKey string    `json:"public_key,omitempty"` // ssh_key items, authorized_keys form
 }
 
 // Client is a paired CLI profile, identified by its certificate.

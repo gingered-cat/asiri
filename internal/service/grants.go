@@ -26,6 +26,7 @@ type RequestInput struct {
 	Ref       domain.Ref
 	BinPath   string
 	BinSHA256 string
+	HostFP    string // SSH: the destination's host key fingerprint; "" for asiri run
 	Argv      []string
 	Cwd       string
 	Reason    string
@@ -58,9 +59,9 @@ func (s *Service) CreateRequest(ctx context.Context, by domain.Client, in Reques
 
 	var gid, rid string
 	err = s.store.R().QueryRowContext(ctx, `SELECT id, request_id FROM grants
-		WHERE client_id = ? AND item_id = ? AND bin_sha256 = ? AND revoked_at IS NULL
+		WHERE client_id = ? AND item_id = ? AND bin_sha256 = ? AND host_fp = ? AND revoked_at IS NULL
 		  AND expires_at > ? AND uses_left IS NULL ORDER BY expires_at DESC LIMIT 1`,
-		by.ID, item.ID, in.BinSHA256, now.UnixMilli()).Scan(&gid, &rid)
+		by.ID, item.ID, in.BinSHA256, in.HostFP, now.UnixMilli()).Scan(&gid, &rid)
 	if err == nil {
 		r, err := s.GetRequest(ctx, by, domain.RequestID(rid))
 		return r, true, err
@@ -70,12 +71,16 @@ func (s *Service) CreateRequest(ctx context.Context, by domain.Client, in Reques
 	}
 
 	argv := s.argvPreview(ctx, item, in.BinPath, in.Argv)
+	if in.HostFP != "" {
+		label, _ := domain.SSHHostAllowed(item.Policy.SSHHosts, in.HostFP)
+		argv = "ssh sign-in to " + hostLabel(label, in.HostFP)
+	}
 	id := domain.RequestID(domain.NewID())
 	err = s.store.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO requests
-			(id, client_id, item_id, ref, bin_path, bin_sha256, argv, cwd, reason, status, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-			id, by.ID, item.ID, item.Ref.String(), in.BinPath, in.BinSHA256, argv, clip(in.Cwd, 200),
+			(id, client_id, item_id, ref, bin_path, bin_sha256, host_fp, argv, cwd, reason, status, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+			id, by.ID, item.ID, item.Ref.String(), in.BinPath, in.BinSHA256, in.HostFP, argv, clip(in.Cwd, 200),
 			clip(in.Reason, 200), now.UnixMilli()); err != nil {
 			return err
 		}
@@ -119,7 +124,7 @@ func clip(s string, n int) string {
 	return s[:n] + "…"
 }
 
-const requestCols = `r.id, r.client_id, COALESCE(c.name, ''), r.ref, r.item_id, r.bin_path, r.argv, r.cwd, r.reason,
+const requestCols = `r.id, r.client_id, COALESCE(c.name, ''), r.ref, r.item_id, r.bin_path, r.host_fp, r.argv, r.cwd, r.reason,
 	r.status, r.decision, r.method, COALESCE(g.id, ''), r.created_at
 	FROM requests r LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN grants g ON g.request_id = r.id`
 
@@ -131,7 +136,7 @@ func scanRequest(row scanner) (domain.Request, error) {
 		ref     string
 		created int64
 	)
-	if err := row.Scan(&r.ID, &r.ClientID, &r.ClientName, &ref, &r.ItemID, &r.BinPath, &r.Argv, &r.Cwd, &r.Reason,
+	if err := row.Scan(&r.ID, &r.ClientID, &r.ClientName, &ref, &r.ItemID, &r.BinPath, &r.HostFP, &r.Argv, &r.Cwd, &r.Reason,
 		&r.Status, &r.Decision, &r.Method, &r.GrantID, &created); err != nil {
 		return domain.Request{}, err
 	}
@@ -253,8 +258,8 @@ func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.Reques
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO grants (id, request_id, client_id, item_id, ref, bin_path,
-				bin_sha256, decision, method, uses_left, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				gid, id, cur.ClientID, cur.ItemID, cur.Ref.String(), cur.BinPath, sha, eff, m, usesLeft,
+				bin_sha256, host_fp, decision, method, uses_left, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				gid, id, cur.ClientID, cur.ItemID, cur.Ref.String(), cur.BinPath, sha, cur.HostFP, eff, m, usesLeft,
 				now.UnixMilli(), now.Add(eff.Duration()).UnixMilli()); err != nil {
 				return err
 			}
@@ -327,15 +332,36 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 // Redeem spends one use of a grant and returns the item's current value.
-// Only the client the grant was made for may redeem it.
+// Only the client the grant was made for may redeem it. SSH grants can't be
+// redeemed: their keys only ever sign, inside the server.
 func (s *Service) Redeem(ctx context.Context, by domain.Client, gid domain.GrantID) (domain.Grant, domain.Secret, error) {
+	g, err := s.spend(ctx, by, gid, false, audit.Redeem, nil)
+	if err != nil {
+		return domain.Grant{}, domain.Secret{}, err
+	}
+	_, sec, err := s.vault.GetByID(ctx, g.ItemID)
+	if err != nil {
+		return domain.Grant{}, domain.Secret{}, err
+	}
+	return g, sec, nil
+}
+
+// spend takes one use of a grant, recording event in the same transaction.
+// ssh says which kind of grant the caller expects.
+func (s *Service) spend(ctx context.Context, by domain.Client, gid domain.GrantID, ssh bool, event string, detail map[string]string) (domain.Grant, error) {
 	if s.vault.Sealed() {
-		return domain.Grant{}, domain.Secret{}, vault.ErrSealed
+		return domain.Grant{}, vault.ErrSealed
 	}
 	now := s.now()
 	g, err := s.getGrant(ctx, gid)
 	if err != nil || g.ClientID != by.ID {
-		return domain.Grant{}, domain.Secret{}, domain.Errorf(domain.CodeNotFound, "no grant %s for %q", gid, by.Name)
+		return domain.Grant{}, domain.Errorf(domain.CodeNotFound, "no grant %s for %q", gid, by.Name)
+	}
+	if ssh != (g.HostFP != "") {
+		if g.HostFP != "" {
+			return domain.Grant{}, domain.Errorf(domain.CodeNotAllowed, "%s is an SSH key; it signs inside asiri and is never handed out", g.Ref)
+		}
+		return domain.Grant{}, domain.Errorf(domain.CodeNotAllowed, "grant %s is not for SSH", gid)
 	}
 	err = s.store.Tx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `UPDATE grants
@@ -355,21 +381,19 @@ func (s *Service) Redeem(ctx context.Context, by domain.Client, gid domain.Grant
 				return domain.Errorf(domain.CodeExpired, "grant %s expired", gid)
 			}
 		}
-		return audit.Append(ctx, tx, now, domain.AuditEvent{ClientID: by.ID, Event: audit.Redeem, ItemID: g.ItemID,
-			Detail: map[string]string{"grant": string(gid), "ref": g.Ref.String(), "bin": filepath.Base(g.BinPath)}})
+		d := map[string]string{"grant": string(gid), "ref": g.Ref.String(), "bin": filepath.Base(g.BinPath)}
+		for k, v := range detail {
+			d[k] = v
+		}
+		return audit.Append(ctx, tx, now, domain.AuditEvent{ClientID: by.ID, Event: event, ItemID: g.ItemID, Detail: d})
 	})
 	if err != nil {
-		return domain.Grant{}, domain.Secret{}, err
+		return domain.Grant{}, err
 	}
-	_, sec, err := s.vault.GetByID(ctx, g.ItemID)
-	if err != nil {
-		return domain.Grant{}, domain.Secret{}, err
-	}
-	g, _ = s.getGrant(ctx, gid)
-	return g, sec, nil
+	return s.getGrant(ctx, gid)
 }
 
-const grantCols = `g.id, g.request_id, g.client_id, COALESCE(c.name, ''), g.item_id, g.ref, g.bin_path, g.decision,
+const grantCols = `g.id, g.request_id, g.client_id, COALESCE(c.name, ''), g.item_id, g.ref, g.bin_path, g.host_fp, g.decision,
 	g.method, g.uses_left, g.created_at, g.expires_at, g.revoked_at
 	FROM grants g LEFT JOIN clients c ON c.id = g.client_id`
 
@@ -380,7 +404,7 @@ func scanGrant(row scanner) (domain.Grant, error) {
 		uses, revoked    sql.NullInt64
 		created, expires int64
 	)
-	if err := row.Scan(&g.ID, &g.RequestID, &g.ClientID, &g.ClientName, &g.ItemID, &ref, &g.BinPath, &g.Decision,
+	if err := row.Scan(&g.ID, &g.RequestID, &g.ClientID, &g.ClientName, &g.ItemID, &ref, &g.BinPath, &g.HostFP, &g.Decision,
 		&g.Method, &uses, &created, &expires, &revoked); err != nil {
 		return domain.Grant{}, err
 	}
@@ -487,13 +511,33 @@ func (s *Service) ReportScrub(ctx context.Context, by domain.Client, id domain.G
 	})
 }
 
-var binName = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
+var (
+	binName      = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
+	sshHostEntry = regexp.MustCompile(`^([A-Za-z0-9._:\[\]-]{1,128}=)?SHA256:[A-Za-z0-9+/]{43}$`)
+)
+
+// hostLabel is "staging (SHA256:abcd1234…)", or just the short fingerprint.
+func hostLabel(name, fp string) string {
+	short := fp
+	if len(short) > 15 {
+		short = short[:15] + "…"
+	}
+	if name == "" {
+		return short
+	}
+	return name + " (" + short + ")"
+}
 
 // SetPolicy replaces the policy of ref.
 func (s *Service) SetPolicy(ctx context.Context, by domain.Client, ref domain.Ref, p domain.Policy) (domain.Item, error) {
 	for _, b := range p.Bins {
 		if !filepath.IsAbs(b) && !binName.MatchString(b) {
 			return domain.Item{}, domain.Errorf(domain.CodeInvalid, "bins entry %q: want a program name like gh, or an absolute path", b)
+		}
+	}
+	for _, h := range p.SSHHosts {
+		if !sshHostEntry.MatchString(h) {
+			return domain.Item{}, domain.Errorf(domain.CodeInvalid, "ssh host %q: want name=SHA256:<host key fingerprint>", h)
 		}
 	}
 	switch p.MaxGrant {

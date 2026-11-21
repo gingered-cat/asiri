@@ -55,7 +55,9 @@ func addCmd(ctx context.Context, args []string) error {
 	profile := profileFlag(fs)
 	kind := fs.String("kind", "", "token, password, ssh_key, login or note (default: token, or the existing kind)")
 	stdin := fs.Bool("stdin", false, "read the value from stdin instead of the terminal")
+	generate := fs.Bool("ssh-generate", false, "make a new Ed25519 SSH key inside the server and print its public key")
 	bins := fs.String("bins", "", "comma-separated programs that may receive it (same as asiri policy --bins)")
+	sshHosts := fs.String("ssh-hosts", "", "SSH keys: comma-separated hosts it may sign in to (same as asiri policy --ssh-hosts)")
 	maxGrant := fs.String("max-grant", "", "longest approval allowed: once, 15m or 1h")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -72,37 +74,60 @@ func addCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	var b []byte
-	if *stdin {
-		b, err = readStdin()
-	} else {
-		b, err = readHidden(fmt.Sprintf("value for %s (hidden): ", ref))
-	}
-	if err != nil {
-		return err
-	}
-	sec := domain.NewSecret(b)
-	defer sec.Zero()
-	if sec.Len() == 0 {
-		return fmt.Errorf("empty value; nothing stored")
-	}
-	it, err := c.PutItem(ctx, ref, domain.Kind(*kind), sec)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("stored %s (%s, version %d)\n", it.Ref, it.Kind, it.Version)
-	if *bins != "" || *maxGrant != "" {
-		b := it.Policy.Bins
-		if *bins != "" {
-			b = splitList(*bins)
+	var it domain.Item
+	if *generate {
+		if it, err = c.GenerateSSHKey(ctx, ref); err != nil {
+			return err
 		}
-		if it, err = c.SetPolicy(ctx, ref, b, *maxGrant); err != nil {
+		fmt.Printf("made %s (ssh key, version %d); the private key stays in the asiri server\n", it.Ref, it.Version)
+	} else {
+		var b []byte
+		if *stdin {
+			b, err = readStdin()
+		} else {
+			b, err = readHidden(fmt.Sprintf("value for %s (hidden): ", ref))
+		}
+		if err != nil {
+			return err
+		}
+		sec := domain.NewSecret(b)
+		defer sec.Zero()
+		if sec.Len() == 0 {
+			return fmt.Errorf("empty value; nothing stored")
+		}
+		if it, err = c.PutItem(ctx, ref, domain.Kind(*kind), sec); err != nil {
+			return err
+		}
+		fmt.Printf("stored %s (%s, version %d)\n", it.Ref, it.Kind, it.Version)
+	}
+	if *bins != "" || *maxGrant != "" || *sshHosts != "" {
+		p := it.Policy
+		if *bins != "" {
+			p.Bins = splitList(*bins)
+		}
+		if *maxGrant != "" {
+			p.MaxGrant = *maxGrant
+		}
+		if *sshHosts != "" {
+			if p.SSHHosts, err = resolveSSHHosts(ctx, splitList(*sshHosts)); err != nil {
+				return err
+			}
+		}
+		if it, err = c.SetPolicy(ctx, ref, p); err != nil {
 			return err
 		}
 	}
-	if len(it.Policy.Bins) == 0 {
+	switch {
+	case it.Kind == domain.KindSSHKey:
+		fmt.Printf("public key (put it in the host's ~/.ssh/authorized_keys):\n\n  %s\n\n", it.PublicKey)
+		if len(it.Policy.SSHHosts) == 0 {
+			fmt.Printf("no host may use it yet; allow one with: asiri policy %s --ssh-hosts HOST\n", it.Ref)
+		} else {
+			fmt.Printf("may sign in to %s\n", strings.Join(it.Policy.SSHHosts, ", "))
+		}
+	case len(it.Policy.Bins) == 0:
 		fmt.Printf("no program may use it yet; allow one with: asiri policy %s --bins gh\n", it.Ref)
-	} else {
+	default:
 		fmt.Printf("may be used by %s\n", strings.Join(it.Policy.Bins, ", "))
 	}
 	return nil
@@ -135,6 +160,14 @@ func lsCmd(ctx context.Context, args []string) error {
 	fmt.Fprintln(tw, "REF\tKIND\tVER\tPROGRAMS\tUPDATED")
 	for _, it := range items {
 		bins := strings.Join(it.Policy.Bins, ",")
+		if it.Kind == domain.KindSSHKey {
+			var names []string
+			for _, h := range it.Policy.SSHHosts {
+				n, _, _ := strings.Cut(h, "=")
+				names = append(names, "ssh:"+n)
+			}
+			bins = strings.Join(names, ",")
+		}
 		if bins == "" {
 			bins = "-"
 		}

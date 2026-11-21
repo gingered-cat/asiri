@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1–M3 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`); M4+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: M1–M4 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`, SSH keys that sign inside the server); M5+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -155,21 +155,31 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Ssh as ssh (child)
-  participant SA as asiri ssh-agent
+  participant Ssh as ssh (OpenSSH 8.9+)
+  participant SA as asiri agent (asiri ssh / ssh-agent)
   participant S as asiri server
   participant R as Rex / approver
 
-  Ssh->>SA: session-bind@openssh.com {host key, session id}
-  SA->>SA: remember host key for this connection
-  Ssh->>SA: sign request {pubkey, data}
-  SA->>S: POST /v1/requests {ssh key ref, host key fingerprint}
-  S->>S: rules: host fingerprint ∈ policy.ssh_hosts
-  S-->>SA: 202 → approval as in 4.1 → grant
-  SA->>S: POST /v1/ssh/sign {grant, data}
-  S-->>SA: signature (key stays in server)
+  Ssh->>SA: session-bind@openssh.com {host key, session id, host's signature}
+  SA->>SA: verify the host's signature, remember SHA256 host fingerprint
+  Ssh->>SA: list identities
+  SA->>S: GET /v1/ssh/keys
+  SA-->>Ssh: only keys whose ssh_hosts include this host
+  Ssh->>SA: sign {pubkey, userauth data}
+  SA->>SA: data starts with the bound session id? not forwarded?
+  SA->>S: POST /v1/requests {ref, host_fp}
+  S->>S: rules: ssh_key kind, host_fp ∈ policy.ssh_hosts
+  S-->>SA: 202 → approval as in 4.1 → grant (bound to client, key, host)
+  SA->>S: POST /v1/ssh/sign {grant, data, flags}
+  S->>S: spend a use, sign inside the server, audit ssh_sign
+  S-->>SA: signature
   SA-->>Ssh: signature
 ```
+
+- The private key is generated in the server (`asiri add --ssh-generate`) or imported once (`asiri add --kind ssh_key --stdin`); it is never returned. `POST /v1/grants/{id}/redeem` refuses SSH grants.
+- The agent refuses: signing without a session-bind (older OpenSSH, or a client that doesn't send it), data that isn't a login for the bound session (`ssh-keygen -Y sign`, git commit signing), forwarded agent connections, and `ssh-add`.
+- `asiri policy REF --ssh-hosts staging` resolves `staging` with `ssh -G` (HostName, Port, HostKeyAlias, UserKnownHostsFile) and `ssh-keygen -F`, and stores `staging=SHA256:…` for each host key found. A host not in known_hosts is refused: connect once with plain ssh to check its key.
+- `asiri ssh ARGS` runs ssh with a private agent socket for that one command (`-o IdentityAgent=…`), so approval notes reach the agent's output. `asiri ssh-agent` is a long-running socket for git, rsync and the rest; its approvals go to Rex (or `asiri approve`).
 
 ### 4.3 Pairing (once per profile)
 
@@ -260,6 +270,7 @@ CREATE TABLE clients   (id TEXT PRIMARY KEY, name TEXT UNIQUE, role TEXT, cert_f
                         created_at INT, revoked_at INT);
 CREATE TABLE pair_codes (hash BLOB PRIMARY KEY, name TEXT, role TEXT, expires_at INT, used_at INT);
 -- M2 (002_grants.sql): requests and grants also store ref, argv, decision and method for display
+-- M4 (003_ssh.sql): items.public_key; requests.host_fp and grants.host_fp; grants_reuse adds host_fp
 CREATE TABLE requests  (id TEXT PRIMARY KEY, client_id TEXT, item_id TEXT, bin_path TEXT,
                         bin_sha256 TEXT, host_fp TEXT, argv_preview TEXT, cwd TEXT, reason TEXT,
                         status TEXT, created_at INT, decided_at INT);
