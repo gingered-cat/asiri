@@ -152,11 +152,15 @@ githubStars().then((n) => {
   }
 });
 
-// ---- sections settle in the first time they scroll into view ----
+// ---- sections settle in each time they scroll into view ----
+// A section resets only once it is fully off screen, so it never flickers while you read it.
 if (!reduced) {
   const io = new IntersectionObserver((entries) => {
-    for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-  }, { threshold: 0.15 });
+    for (const e of entries) {
+      if (e.intersectionRatio >= 0.15) e.target.classList.add("in");
+      else if (!e.isIntersecting) e.target.classList.remove("in");
+    }
+  }, { threshold: [0, 0.15] });
   document.querySelectorAll("main > section").forEach((section) => {
     [...section.querySelectorAll(":scope > h2, :scope > p, :scope > pre, .row, .actions")]
       .forEach((el, i) => { el.classList.add("reveal"); el.style.setProperty("--i", Math.min(i, 8)); });
