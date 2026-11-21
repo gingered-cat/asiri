@@ -31,6 +31,24 @@ if (matchMedia('(max-width: 760px)').matches) {
 const guideLinks = [...document.querySelectorAll('.reading-guide a')];
 const headings = guideLinks.map(link => document.getElementById(decodeURIComponent(link.hash.slice(1))));
 let scrollQueued = false;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const guide = document.querySelector('.reading-guide');
+
+// A hairline that grows with reading progress. CSS scroll timelines drive it
+// where supported; otherwise (and under reduced motion) the scroll handler does.
+const progress = document.createElement('div');
+progress.className = 'read-progress';
+progress.setAttribute('aria-hidden', 'true');
+document.body.prepend(progress);
+const cssProgress = !reduced && CSS.supports('animation-timeline: scroll()');
+if (cssProgress) progress.classList.add('css-driven');
+function updateProgress() {
+  const max = document.documentElement.scrollHeight - innerHeight;
+  progress.hidden = max < 200; // nothing to track on a short page
+  if (!cssProgress) progress.style.setProperty('--read', max > 0 ? Math.min(1, scrollY / max) : 0);
+}
+
+let lastActive = -1;
 function markSection() {
   let active = 0;
   headings.forEach((heading, i) => {
@@ -40,8 +58,23 @@ function markSection() {
     if (i === active) link.setAttribute('aria-current', 'location');
     else link.removeAttribute('aria-current');
   });
+  // Keep the current entry in view when the guide is taller than the screen.
+  if (active !== lastActive && guideLinks[active] && guide.scrollHeight > guide.clientHeight) {
+    guideLinks[active].scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+  }
+  lastActive = active;
+  updateProgress();
   scrollQueued = false;
 }
+
+// Each section's rule is drawn once, in red, as it arrives on screen.
+if (!reduced) {
+  const arrive = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('arrived'); arrive.unobserve(e.target); }
+  }, { rootMargin: '0px 0px -20% 0px' });
+  document.querySelectorAll('.prose h2').forEach((h) => arrive.observe(h));
+}
+addEventListener('resize', updateProgress, { passive: true });
 addEventListener('scroll', () => {
   if (!scrollQueued) {
     scrollQueued = true;
