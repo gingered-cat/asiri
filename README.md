@@ -191,7 +191,9 @@ The website is static. Edit documentation in `docs/*.md` and the shared layout i
 `docs/layout.html`, then run `go run ./dev docs`. Commit the generated pages and
 Markdown under `site/docs/` with their sources. `go run ./dev docs --check` detects
 stale output. Preview with `python3 -m http.server 8788 --directory site` and open
-`http://localhost:8788/docs/`. Pages deploys the `site/` directory without a build step.
+`http://localhost:8788/docs/`.
+
+asiri.run is the Cloudflare Pages project `asiri`. Every push to `main` that touches `site/` or `docs/` deploys it (`.github/workflows/site.yml`, which needs the repository secret `CLOUDFLARE_API_TOKEN` and the variable `CLOUDFLARE_ACCOUNT_ID`). To deploy by hand, `go run ./dev site` uploads `main`'s `site/` with wrangler; local edits are never included.
 
 ## license
 
