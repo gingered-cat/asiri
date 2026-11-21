@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, and `asiri run` with approvals in the terminal, an allow-list of programs, and secrets scrubbed from output. Next: Rex approvals, SSH, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.1 in progress.** Works: the encrypted vault in a container, pairing over mTLS, `asiri add` / `ls`, `asiri run` with an allow-list of programs and secrets scrubbed from output, and approvals from [Rex](https://www.superlogical.com/rex), the terminal or `asiri approve`. Next: SSH, the MCP server. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -47,16 +47,6 @@ asiri run --env GH_TOKEN=asiri://dev/github --reason "open the PR" -- gh pr crea
 
 You're asked once (Return = once, `f` = 15 min, `h` = 1 hour, `d` = deny). Within a 15 min or 1 h grant, the same program runs again without asking.
 
-When an agent runs it (no terminal), it waits and prints the command to approve it in yours:
-
-```text
-asiri: claude wants asiri://dev/github
-asiri:   gh pr create --fill · ~/proj/api · "open the PR"
-asiri: waiting for approval (until 17:07:42). in your terminal, run:
-
-  asiri approve 01M7WV9QAXVYMTM68PR5WQA8SW
-```
-
 | delivery | how | note |
 |---|---|---|
 | `--stdin REF` | written to the program's stdin | best when the program reads it (`docker login --password-stdin`) |
@@ -71,6 +61,36 @@ What asiri won't do:
 
 Scrubbing is a safety net, not the defence: an allowed program with its own way to send data out (`gh gist create`) can still do that. Pick `--bins` with that in mind.
 
+## 05 approve from Rex
+
+```sh
+asiri rex install
+```
+
+asiri joins Rex's command palette, and every request from an agent pops up there, on every Rex app you have connected. The first answer wins. Return allows once; closing the prompt denies.
+
+```text
+claude wants asiri://dev/github
+  › Allow once                 gh pr create --fill · ~/proj/api · "open the PR"
+    Allow for 15 minutes
+    Allow for 1 hour
+    Deny
+```
+
+The plugin records your answer itself, running `asiri approve` with your **owner** profile. The agent that asked can't approve anything: the server refuses decisions from agent profiles.
+
+Also in the palette: **Asiri: Approve Waiting Requests…**, **Asiri: Revoke Everything** (the kill switch) and **Asiri: Lock the Vault**. `asiri rex uninstall` removes it. asiri only touches its own marked block in `init.lua`, and puts the file back if `rex config check` rejects the change. For a Rex server other than the local one, set `ASIRI_REX_SERVER` (a host label or socket path).
+
+Without Rex, or when no Rex app is open, asiri asks in your terminal if you ran the command yourself. When an agent ran it, asiri waits and prints the command for you to approve in your own terminal:
+
+```text
+asiri: claude wants asiri://dev/github
+asiri:   gh pr create --fill · ~/proj/api · "open the PR"
+asiri: waiting for approval (until 17:07:42). in your terminal, run:
+
+  asiri approve 01M7WV9QAXVYMTM68PR5WQA8SW
+```
+
 ## give an agent its own profile
 
 ```sh
@@ -83,7 +103,8 @@ ASIRI_PROFILE=claude asiri ls        # agents can list; they can't add, unlock o
 
 | command | does |
 |---|---|
-| `asiri approve [ID] [--for 15m]` / `asiri deny ID` | answer waiting requests |
+| `asiri approve [ID] [--for 15m]` / `asiri deny ID` / `asiri pending` | answer waiting requests / list them |
+| `asiri rex install` / `uninstall` / `status` | approvals in Rex's command palette |
 | `asiri grants` / `asiri revoke ID` / `asiri revoke --all` | live grants / revoke one / kill switch |
 | `asiri lock` / `asiri unlock` | lock now / unlock (passphrase, or the server's key file) |
 | `asiri clients ls` / `revoke NAME` | see and revoke paired clients |

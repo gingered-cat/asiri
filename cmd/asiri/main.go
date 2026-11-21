@@ -54,6 +54,8 @@ func init() {
 		"approve": {"approve [ID [--for once|15m|1h]]", "approve waiting requests", approveCmd},
 		"deny":    {"deny ID", "deny a waiting request", denyCmd},
 		"grants":  {"grants", "list live grants", grantsCmd},
+		"pending": {"pending [--json]", "list requests waiting for approval", pendingCmd},
+		"rex":     {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
 		"revoke":  {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
 		"version": {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}

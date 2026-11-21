@@ -2,16 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/gingered-cat/asiri/internal/approve"
+	"github.com/gingered-cat/asiri/internal/client"
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/rexplug"
 	"github.com/gingered-cat/asiri/internal/run"
 )
 
@@ -75,11 +79,14 @@ func runCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return &run.ExitError{Code: run.ExitFailed, Err: err}
 	}
-	r := &run.Runner{
-		API:      c,
-		Approver: approve.Chain{approve.TTY{}, approve.Wait{API: c, Out: os.Stderr}},
-		Notes:    os.Stderr,
+	// Rex first, then this terminal (owners only: agents can't approve),
+	// then "run asiri approve ID".
+	chain := approve.Chain{approve.Rex{Server: os.Getenv("ASIRI_REX_SERVER"), Out: os.Stderr}}
+	if who, err := c.WhoAmI(ctx); err == nil && who.Role == domain.RoleOwner {
+		chain = append(chain, approve.TTY{})
 	}
+	chain = append(chain, approve.Wait{API: c, Out: os.Stderr})
+	r := &run.Runner{API: c, Approver: chain, Notes: os.Stderr}
 	code, err := r.Run(ctx, run.Spec{Bin: rest[0], Args: rest[1:], Deliveries: ds, Reason: *reason,
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	if err != nil {
@@ -311,4 +318,108 @@ func baseName(p string) string {
 		return p[i+1:]
 	}
 	return p
+}
+
+func pendingCmd(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("pending", flag.ContinueOnError)
+	profile := profileFlag(fs)
+	asJSON := fs.Bool("json", false, "print JSON (used by the Rex plugin)")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	c, _, err := connect(*profile)
+	if err != nil {
+		return err
+	}
+	rs, err := c.PendingRequests(ctx)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return json.NewEncoder(os.Stdout).Encode(rs)
+	}
+	if len(rs) == 0 {
+		fmt.Println("nothing is waiting for approval")
+		return nil
+	}
+	for _, rq := range rs {
+		fmt.Printf("%s  %s\n    %s\n", rq.ID, rq.Title, rq.Detail)
+	}
+	return nil
+}
+
+func rexCmd(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return usageError{"missing subcommand: install, uninstall or status"}
+	}
+	fs := flag.NewFlagSet("rex", flag.ContinueOnError)
+	profile := fs.String("profile", client.DefaultProfile, "the owner profile the plugin approves with")
+	sub := args[0]
+	if _, err := parse(fs, args[1:]); err != nil {
+		return err
+	}
+	switch sub {
+	case "install":
+		bin, err := installedBinary()
+		if err != nil {
+			return err
+		}
+		c, _, err := connect(*profile)
+		if err != nil {
+			return fmt.Errorf("the Rex plugin approves as profile %q: %w", *profile, err)
+		}
+		if who, err := c.WhoAmI(ctx); err != nil {
+			return err
+		} else if who.Role != domain.RoleOwner {
+			return fmt.Errorf("profile %q is %s; the Rex plugin needs an owner profile to approve with", *profile, who.Role)
+		}
+		res, err := rexplug.Install(ctx, rexplug.SystemRex, bin, *profile)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("asiri is in Rex's command palette. Press cmd+shift+p and type asiri.\n")
+		fmt.Printf("  Asiri: Approve Waiting Requests…   answer agents' requests (they also pop up by themselves)\n")
+		fmt.Printf("  Asiri: Revoke Everything            the kill switch\n")
+		fmt.Printf("  Asiri: Lock the Vault\n")
+		fmt.Printf("plugin  %s\nconfig  %s (asiri's block only)\n", res.Plugin, res.Config)
+		if !res.Reloaded {
+			fmt.Printf("Rex isn't running, so it picks this up when it starts (%v)\n", res.ReloadErr)
+		}
+		return nil
+	case "uninstall":
+		res, err := rexplug.Uninstall(ctx, rexplug.SystemRex)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("removed asiri from Rex (%s)\n", res.Config)
+		return nil
+	case "status":
+		ok, config, err := rexplug.Installed()
+		if err != nil {
+			return err
+		}
+		if ok {
+			fmt.Printf("installed in %s\n", config)
+		} else {
+			fmt.Printf("not installed; run: asiri rex install\n")
+		}
+		return nil
+	}
+	return usageError{fmt.Sprintf("unknown rex subcommand %q", sub)}
+}
+
+// installedBinary is this asiri's real path. The plugin runs it later, so a
+// `go run` build in a temp directory won't do.
+func installedBinary() (string, error) {
+	bin, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if bin, err = filepath.EvalSymlinks(bin); err != nil {
+		return "", err
+	}
+	if strings.Contains(bin, "go-build") {
+		return "", errors.New("this asiri was started with `go run`; build or install it first (go run ./dev bin)")
+	}
+	return bin, nil
 }

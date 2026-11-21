@@ -293,7 +293,10 @@ func TestGrantLifecycle(t *testing.T) {
 	woke := make(chan domain.Request, 1)
 	go func() { r, _ := agent.Request(ctx, rq.ID, 10*time.Second); woke <- r }()
 	time.Sleep(100 * time.Millisecond)
-	decided, err := agent.Decide(ctx, rq.ID, domain.Decide1h, domain.MethodTTY)
+	if _, err := agent.Decide(ctx, rq.ID, domain.DecideOnce, domain.MethodTTY); code(err) != domain.CodeNotAllowed {
+		t.Fatalf("agent approving itself: %v", err)
+	}
+	decided, err := owner.Decide(ctx, rq.ID, domain.Decide1h, domain.MethodRex)
 	if err != nil || decided.Status != domain.StatusApproved || decided.Decision != domain.Decide15m || decided.GrantID == "" {
 		t.Fatalf("decide = %+v, %v", decided, err)
 	}
@@ -333,7 +336,7 @@ func TestGrantLifecycle(t *testing.T) {
 
 	// Once: one redeem, then spent.
 	r2, _ := agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh"))
-	once, err := agent.Decide(ctx, r2.Request.ID, domain.DecideOnce, domain.MethodTTY)
+	once, err := owner.Decide(ctx, r2.Request.ID, domain.DecideOnce, domain.MethodRex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +368,7 @@ func TestGrantLifecycle(t *testing.T) {
 
 	// Kill switch: live grants revoked, pending requests denied.
 	r5, _ := agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh"))
-	live, _ := agent.Decide(ctx, r5.Request.ID, domain.Decide15m, domain.MethodTTY)
+	live, _ := owner.Decide(ctx, r5.Request.ID, domain.Decide15m, domain.MethodRex)
 	r6, _ := agent.CreateRequest(ctx, api.CreateRequest{Ref: ref, BinPath: "/usr/local/bin/gh", BinSHA256: strings.Repeat("b", 64)})
 	if gs, _ := owner.Grants(ctx); len(gs) != 1 {
 		t.Fatalf("active grants = %+v", gs)
@@ -380,11 +383,11 @@ func TestGrantLifecycle(t *testing.T) {
 		t.Fatalf("pending after kill switch = %s", got.Status)
 	}
 
-	// Another agent can't see or decide claude's requests.
+	// Another agent can't see claude's requests.
 	other := e.pair(t, "other", domain.RoleAgent)
 	r7, _ := agent.CreateRequest(ctx, ghRequest(ref, "/opt/homebrew/bin/gh"))
-	if _, err := other.Decide(ctx, r7.Request.ID, domain.DecideOnce, domain.MethodTTY); code(err) != domain.CodeNotFound {
-		t.Fatalf("other agent decide: %v", err)
+	if _, err := other.Request(ctx, r7.Request.ID, 0); code(err) != domain.CodeNotFound {
+		t.Fatalf("other agent read: %v", err)
 	}
 
 	if _, err := owner.VerifyAudit(ctx); err != nil {
