@@ -12,3 +12,17 @@
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+# Scripts and styles keep their names between releases, so browsers must check
+# for a new version on every visit (a cheap 304 when nothing changed).
+/app.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/style.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/docs/docs.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/docs/docs.v2.css
+  Cache-Control: public, max-age=0, must-revalidate
