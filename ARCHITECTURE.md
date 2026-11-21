@@ -4,7 +4,7 @@ Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by
 
 This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: M1 and M2 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, terminal and wait approvals, scrubbing); M3+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: M1–M3 built (vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, approvals from Rex, the terminal or `asiri approve`, `asiri rex install`); M4+ is design. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -131,13 +131,14 @@ sequenceDiagram
     S-->>CLI: 200 {grant_id}
   else needs approval
     S-->>CLI: 202 {request_id, summary}
-    CLI->>R: rex do asiri_approve id title detail --timeout 120
+    CLI->>R: rex do asiri_approve --args {id, title, detail} --json
     R->>P: palette: "claude wants dev/github · gh pr create · open PR"
     P->>R: Allow once
-    R-->>CLI: {"result":"once"}
-    CLI->>S: POST /v1/requests/{id}/decision {once, method: rex}
+    R->>S: rex.exec asiri approve ID --for once (owner profile)
     S->>S: tx: request→approved, grant created, audit ×2
-    S-->>CLI: 200 {grant_id}
+    R-->>CLI: {"result":"once"}
+    CLI->>S: GET /v1/requests/{id}
+    S-->>CLI: approved {grant_id}
   end
   CLI->>S: POST /v1/grants/{id}/redeem
   S->>S: tx: uses_left-1 where uses_left>0 and not expired/revoked, audit
@@ -299,7 +300,7 @@ HTTPS, TLS 1.3 only, client certificate required (except `/v1/pair`). JSON. Erro
 | POST | `/v1/import/{apple\|google}` | owner | CSV body, streamed |
 | POST | `/v1/requests` | agent | `Idempotency-Key` header; returns 200 grant / 202 pending / 403 rejected |
 | GET | `/v1/requests/{id}?wait=30s` | agent | long poll |
-| POST | `/v1/requests/{id}/decision` | agent\* / owner | first decision wins |
+| POST | `/v1/requests/{id}/decision` | owner | first decision wins; agents can never decide, not even their own requests |
 | POST | `/v1/grants/{id}/redeem` | agent | not idempotent on purpose |
 | POST | `/v1/ssh/sign` | agent | grant + data → signature |
 | POST | `/v1/grants/{id}/revoke`, `/v1/revoke-all` | owner | kill switch |
@@ -308,7 +309,7 @@ HTTPS, TLS 1.3 only, client certificate required (except `/v1/pair`). JSON. Erro
 | POST | `/v1/pair` | none (code) | one-time code |
 | GET | `/v1/health` | none | `{sealed: bool, version}` |
 
-\* In v0.1 an agent-profile CLI may report the decision it got from Rex or the tty. See §11.
+Decisions come from the owner's profile: the Rex plugin runs `asiri approve`/`deny` itself (through `rex.exec`), and `asiri approve` runs in the person's terminal. The agent's CLI only waits. See §11.
 
 Error codes: `sealed`, `not_found`, `not_allowed` (bin/host/role), `interpreter_refused`, `denied`, `expired`, `spent`, `revoked`, `rate_limited`, `conflict`.
 
@@ -590,11 +591,11 @@ Lock order: never hold the broker or limiter mutex while in a DB transaction. Pu
 | Long polling | WebSocket / SSE | decisions are rare and short-lived; plain HTTP is simpler | a held connection per waiting request (a handful) |
 | Allow-lists + scrubbing | full sandboxing of the child | works today on stock macOS | an allowed binary with its own exfil path (e.g. `gh gist create`) is still a gap |
 | `--env` supported | stdin/file only | many tools only read env | env visible to same-user processes via `ps eww` while the child runs; docs say prefer stdin/file |
-| CLI-reported approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | a process running as the person can forge approvals; fixed in v0.2 (see below) |
+| Owner-profile approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | agents can't decide through the API, but a process running as the person can read the owner profile's key and approve; fixed in v0.2 (see below) |
 | One binary | separate server and client builds | one release, one version, shared `domain` | server code in the client binary (a few MB) |
 
 ### v0.2: signed approvals
-`Approver` gets a fourth implementation: a small signed macOS helper holding an approval key in the Secure Enclave, Touch ID on every signature. `Decide` then requires `sig = Sign(request_id | item | bin_sha256 | host_fp | decision | expires_at)` from an enrolled key, and the `agent*` row in §7 goes away. Rex stays as the notification and routing. No caller changes, because the interface already exists.
+`Approver` gets a fourth implementation: a small signed macOS helper holding an approval key in the Secure Enclave, Touch ID on every signature. `Decide` then requires `sig = Sign(request_id | item | bin_sha256 | host_fp | decision | expires_at)` from an enrolled key, so holding the owner profile's key is no longer enough. Rex stays as the notification and routing. No caller changes, because the interface already exists.
 
 ---
 
@@ -627,7 +628,7 @@ internal/approve/       Approver, Chain, rex, tty, wait
 internal/run/           Runner, deliveries, scrubber
 internal/sshagent/      agent socket, session-bind, remote signing
 internal/mcp/           stdio MCP server
-rex/asiri.lua           Rex approval action
+internal/rexplug/       `asiri rex install`: asiri.lua plugin + managed init.lua block
 skill/skill.md          agent rules
 deploy/                 Dockerfile, compose.yaml
 dev/                    go run ./dev ci

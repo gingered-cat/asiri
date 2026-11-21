@@ -197,11 +197,16 @@ func (s *Service) PendingRequests(ctx context.Context) ([]domain.Request, error)
 }
 
 // Decide records the first decision for a pending request. Later decisions
-// get a conflict error and the request as it now stands. An agent may only
-// decide its own requests (in v0.1 the CLI reports what the person chose).
+// get a conflict error and the request as it now stands. Only owners decide:
+// an agent can never approve its own request, so approvals come from the
+// person's own profile (the Rex plugin or `asiri approve`).
 func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.RequestID, d domain.Decision, m domain.Method) (domain.Request, error) {
 	if !d.Valid() || !m.Valid() {
 		return domain.Request{}, domain.Errorf(domain.CodeInvalid, "decision %q / method %q", d, m)
+	}
+	if by.Role != domain.RoleOwner {
+		return domain.Request{}, domain.Errorf(domain.CodeNotAllowed,
+			"%q is an agent and can't approve requests; approve as the owner (Rex, or `asiri approve`)", by.Name)
 	}
 	cur, err := s.GetRequest(ctx, by, id)
 	if err != nil {
