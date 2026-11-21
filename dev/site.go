@@ -42,6 +42,9 @@ func siteTask(args []string) error {
 	if err := untar.Wait(); err != nil {
 		return err
 	}
+	if _, err := stamp(dir+"/site", sha[:12]); err != nil {
+		return err
+	}
 	fmt.Printf("deploying site/ from %s (%s)\n", rev, sha[:12])
 	deploy := exec.Command("npx", "--yes", "wrangler", "pages", "deploy", "site",
 		"--project-name", "asiri", "--branch", "main",
