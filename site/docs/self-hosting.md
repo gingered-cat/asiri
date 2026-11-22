@@ -20,7 +20,7 @@ docker compose -f deploy/compose.yaml ps
 docker compose -f deploy/compose.yaml logs --tail 50 asiri
 ```
 
-The `--build` flag builds the server from your checkout. Keep the host CLI and server on the same source revision.
+The `--build` flag builds the server from your checkout. Without it, Compose uses the published `0.1` image by default. Set `ASIRI_VERSION=v0.1.1` to pin an exact release. Keep the host CLI and server on compatible releases.
 
 ### key-file mode
 

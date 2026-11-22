@@ -53,15 +53,34 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive image tags
+        id: tags
+        shell: bash
+        run: |
+          image="ghcr.io/gingered-cat/asiri"
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+            minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            {
+              echo 'tags<<EOF'
+              echo "$image:$tag"
+              echo "$image:$minor"
+              echo "$image:latest"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+            # A prerelease must not replace a stable minor channel or latest.
+            echo "tags=$image:$tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "invalid release tag: $tag" >&2
+            exit 1
+          fi
       - uses: docker/build-push-action@v6
         with:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: VERSION=${{ github.ref_name }}
-          tags: |
-            ghcr.io/gingered-cat/asiri:${{ github.ref_name }}
-            ghcr.io/gingered-cat/asiri:0.1
-            ghcr.io/gingered-cat/asiri:latest
+          tags: ${{ steps.tags.outputs.tags }}
 
   publish:
     needs: [binaries, image]
