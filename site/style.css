@@ -51,7 +51,9 @@ button:active { transform: scale(0.97); }
 /* the body sits over the shackle, so the legs slide down into it */
 .lock .lock-body { position: relative; z-index: 1; background: var(--paper); }
 /* the one red event: lights instantly (no transition in), fades slowly out */
-.lock .k { transition: color 700ms ease-out; }
+/* the keyhole spinner's braille glyphs come from a fallback font and run wider
+   than 1ch; a fixed slot keeps the body's right edge from bulging */
+.lock .k { display: inline-block; width: 1ch; text-align: center; transition: color 700ms ease-out; }
 .lock.lit .k { color: var(--accent); transition: none; }
 .log { list-style: none; font-size: 13px; line-height: 22px; }
 .log li { display: grid; grid-template-columns: 48px 1fr; gap: 12px; overflow-wrap: break-word;
