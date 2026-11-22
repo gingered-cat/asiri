@@ -25,6 +25,27 @@ html:has(.docs) { scroll-padding-top: 32px; }
 .chevron { display: inline-block; flex: 0 0 8px; font-size: 18px; line-height: 16px; transform-origin: center; transition: transform var(--docs-fast) var(--docs-ease); }
 details[open] > summary > .chevron { transform: rotate(90deg); }
 .tree details[open] > :not(summary) { animation: branch-in var(--docs-reveal) var(--docs-ease); }
+/* Where size keywords interpolate, a branch slides open from 0 and shuts a little
+   faster, its content drifting the same 3 px back up as it fades. Elsewhere the
+   disclosure opens and closes at once, as before. */
+@supports (interpolate-size: allow-keywords) and selector(::details-content) {
+  .tree { interpolate-size: allow-keywords; }
+  .tree details::details-content { display: flow-root; block-size: 0; overflow: clip; overflow-clip-margin: 6px;
+    transition: block-size var(--docs-fast) var(--docs-ease), content-visibility var(--docs-fast) allow-discrete; }
+  .tree details[open]::details-content { block-size: auto; transition-duration: var(--docs-reveal); }
+  .tree details:not([open]) > :not(summary) { opacity: 0; translate: 0 -3px;
+    transition: opacity var(--docs-fast) ease-out, translate var(--docs-fast) var(--docs-ease); }
+  /* flow-root keeps a branch's margins inside the sliding box, so nothing snaps at
+     either end. The gap a list's last margin used to leave below its disclosure
+     moves onto the disclosure instead, and slides with it; at rest nothing moves. */
+  .tree details > .branches { margin-bottom: 0; }
+  .reading-guide details { transition: margin-bottom var(--docs-fast) var(--docs-ease); }
+  .reading-guide details[open] { margin-bottom: 12px; transition-duration: var(--docs-reveal); }
+  @media (min-width: 761px) { .nav-group:last-child, .reading-guide li:last-child > details { margin-bottom: 0; } }
+  /* Mobile collapses both trees on load; that should not be seen as a slide. */
+  .docs.settling ::details-content, .docs.settling .tree details, .docs.settling .tree details > * { transition: none; }
+  @media (prefers-reduced-motion: reduce) { .docs ::details-content { transition: none !important; } }
+}
 .tree ul { list-style: none; }
 .branches { border-left: 1px solid var(--line); margin: 4px 0 12px 4px; padding-left: 16px; }
 .branches > li { position: relative; }
@@ -45,6 +66,14 @@ details[open] > summary > .chevron { transform: rotate(90deg); }
 .reading-guide .branches a { font-size: 11px; line-height: 20px; }
 .reading-guide .branches .branches { padding-left: 12px; }
 .reading-guide .branches .branches > li::before { left: -13px; }
+/* One tint marks where you are. docs.js glides it from the last entry to the new
+   one with a transform; without that it cross-fades. */
+.reading-guide .branches a { position: relative; isolation: isolate; }
+.reading-guide .branches a[aria-current] { background: none; }
+.reading-guide .branches a::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: var(--tint); opacity: 0; transform-origin: 0 0; transition: opacity var(--docs-reveal) ease-out; }
+.reading-guide .branches a[aria-current]::before { opacity: 1; }
+.reading-guide.glides .branches a::before { transition: none; }
 .guide-note { color: var(--mute); font-size: 10px; line-height: 18px; margin-top: 28px; }
 
 .page-meta { display: flex; justify-content: space-between; gap: 16px; font-size: 11px; line-height: 20px; color: var(--mute); padding: 4px 0 20px; border-bottom: 1px solid var(--line); }
@@ -160,5 +189,5 @@ kbd { font: inherit; font-size: 10px; color: var(--mute); border: 1px solid var(
   #commands { background-color: #14120F; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs *, ::view-transition-new(article) { animation: none !important; transition: none !important; }
+  .docs *, .docs ::before, .docs ::after, ::view-transition-new(article) { animation: none !important; transition: none !important; }
 }
