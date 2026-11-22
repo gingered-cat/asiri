@@ -5,9 +5,11 @@
 #   docker compose exec asiri asiri server pair-code     # prints the pair command
 #
 # The server is only reachable from this machine (127.0.0.1).
+# Defaults to the published 0.1 release channel. Set ASIRI_VERSION=v0.1.1
+# to pin an exact release, or use --build to run the local checkout.
 services:
   asiri:
-    image: ghcr.io/gingered-cat/asiri:${ASIRI_VERSION:-dev}
+    image: ghcr.io/gingered-cat/asiri:${ASIRI_VERSION:-0.1}
     build: ..
     restart: unless-stopped
     ports:

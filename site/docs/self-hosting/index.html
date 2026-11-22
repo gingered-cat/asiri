@@ -86,7 +86,7 @@
 docker compose -f deploy/compose.yaml ps
 docker compose -f deploy/compose.yaml logs --tail 50 asiri
 </code></pre>
-<p>The <code>--build</code> flag builds the server from your checkout. Keep the host CLI and server on the same source revision.</p>
+<p>The <code>--build</code> flag builds the server from your checkout. Without it, Compose uses the published <code>0.1</code> image by default. Set <code>ASIRI_VERSION=v0.1.1</code> to pin an exact release. Keep the host CLI and server on compatible releases.</p>
 <h3 id="key-file-mode">key-file mode</h3>
 <p>The default Compose file mounts <code>~/.config/asiri/master.key</code> as a Docker secret. <code>ASIRI_KEY_FILE</code> can point Compose at another key file on the host.</p>
 <p>The server unlocks from that file. Protect the file and its backups. On native Linux Docker, user 65532 must be able to read it. Do not make the key world-readable.</p>

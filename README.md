@@ -14,7 +14,7 @@ asiri server keygen -o ~/.config/asiri/master.key            # back this file up
 cd deploy && docker compose up -d
 ```
 
-The server listens on `127.0.0.1:7420` only. On first start it creates the vault from the key file.
+Compose uses the published `0.1` image by default. Set `ASIRI_VERSION=v0.1.1` to pin an exact release, or use `docker compose up -d --build` to build the local checkout. The server listens on `127.0.0.1:7420` only. On first start it creates the vault from the key file.
 
 On Linux Docker, the container runs as uid 65532 and must be able to read the key file: `sudo chown 65532 ~/.config/asiri/master.key`. Docker Desktop and OrbStack on macOS handle this for you.
 
