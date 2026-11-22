@@ -17,3 +17,15 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go run ./dev ci
+
+  # Builds the Touch ID helper and checks the sentence it shows before
+  # signing matches approvalkey.Describe on every test statement.
+  touchid:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./dev touchid
+      - run: sh -n site/install.sh

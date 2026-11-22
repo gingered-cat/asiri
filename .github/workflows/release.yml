@@ -43,6 +43,24 @@ jobs:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
+  # The Touch ID helper is Swift and needs Apple's SDK, so it builds on macOS.
+  touchid:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the Touch ID helper (arm64, amd64)
+        run: |
+          for arch in arm64 amd64; do
+            go run ./dev touchid -arch "$arch" -o "dist/asiri-touchid-${GITHUB_REF_NAME}-darwin-${arch}"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-touchid
+          path: dist/*
+
   image:
     runs-on: ubuntu-latest
     steps:
@@ -83,7 +101,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
 
   publish:
-    needs: [binaries, image]
+    needs: [binaries, touchid, image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

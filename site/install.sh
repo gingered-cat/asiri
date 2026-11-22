@@ -41,23 +41,40 @@ base="https://github.com/${repo}/releases/download/${version}"
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 
-say "downloading ${name}"
-curl -fsSL "${base}/${name}" -o "$tmp" || die "couldn't download ${name}; is ${version} a released version? https://github.com/${repo}/releases"
-sums=$(curl -fsSL "${base}/checksums.txt") || die "couldn't download checksums for ${version}"
-want=$(printf '%s\n' "$sums" | awk -v name="$name" 'index($2, name) { print $1; exit }')
-[ -n "$want" ] || die "no checksum for ${name}"
-if command -v shasum >/dev/null 2>&1; then
-  got=$(shasum -a 256 "$tmp" | awk '{print $1}')
-else
-  got=$(sha256sum "$tmp" | awk '{print $1}')
-fi
-[ "$got" = "$want" ] || die "checksum mismatch for ${name}"
+sums=$(curl -fsSL "${base}/checksums.txt") || die "couldn't download checksums for ${version}; is ${version} a released version? https://github.com/${repo}/releases"
+
+# checksum NAME: the published SHA-256 of a release file, matched by its exact
+# base name (v0.1.0 listed paths like ./darwin-arm64/asiri-...).
+checksum() {
+  printf '%s\n' "$sums" | awk -v name="$1" '{ f = $2; sub(/^\*/, "", f); n = split(f, p, "/"); if (p[n] == name) { print $1; exit } }'
+}
+
+# install_file NAME TARGET: download a release file, verify it, move it into place.
+install_file() {
+  want=$(checksum "$1")
+  [ -n "$want" ] || die "no checksum for $1"
+  say "downloading $1"
+  curl -fsSL "${base}/$1" -o "$tmp" || die "couldn't download $1"
+  if command -v shasum >/dev/null 2>&1; then
+    got=$(shasum -a 256 "$tmp" | awk '{print $1}')
+  else
+    got=$(sha256sum "$tmp" | awk '{print $1}')
+  fi
+  [ "$got" = "$want" ] || die "checksum mismatch for $1"
+  chmod 755 "$tmp"
+  mv "$tmp" "$2"
+  say "installed $2"
+}
 
 mkdir -p "$dest"
-chmod 755 "$tmp"
-mv "$tmp" "$bin"
+install_file "$name" "$bin"
+
+# macOS: the Touch ID helper that signs approvals (releases from v0.2.0).
+helper="asiri-touchid-${version}-darwin-${arch}"
+if [ "$os" = darwin ] && [ -n "$(checksum "$helper")" ]; then
+  install_file "$helper" "${dest}/asiri-touchid"
+fi
 trap - EXIT
-say "installed ${bin}"
 
 case ":${PATH}:" in
   *":${dest}:"*) ;;
@@ -77,3 +94,6 @@ fi
 
 say "adding asiri to Rex"
 "$bin" rex install
+if [ "$os" = darwin ] && [ -x "${dest}/asiri-touchid" ]; then
+  say "to make approvals need Touch ID, run: asiri touchid enroll"
+fi

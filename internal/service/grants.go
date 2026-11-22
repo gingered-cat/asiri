@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gingered-cat/asiri/internal/api"
 	"github.com/gingered-cat/asiri/internal/audit"
 	"github.com/gingered-cat/asiri/internal/domain"
 	"github.com/gingered-cat/asiri/internal/vault"
@@ -205,7 +206,13 @@ func (s *Service) PendingRequests(ctx context.Context) ([]domain.Request, error)
 // get a conflict error and the request as it now stands. Only owners decide:
 // an agent can never approve its own request, so approvals come from the
 // person's own profile (the Rex plugin or `asiri approve`).
-func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.RequestID, d domain.Decision, m domain.Method) (domain.Request, error) {
+//
+// Once an approval key is enrolled, an allow must carry a signature by it
+// over the request's statement (see approval.go); the decision is then
+// recorded with method "touchid", and the method the client reported goes
+// into the audit row as "via".
+func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.RequestID, req api.DecisionRequest) (domain.Request, error) {
+	d, m := req.Decision, req.Method
 	if !d.Valid() || !m.Valid() {
 		return domain.Request{}, domain.Errorf(domain.CodeInvalid, "decision %q / method %q", d, m)
 	}
@@ -224,6 +231,17 @@ func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.Reques
 	}
 	if cur.Status != domain.StatusPending {
 		return cur, domain.Errorf(domain.CodeConflict, "request was already %s", cur.Status)
+	}
+	signedBy, err := s.requireSigned(ctx, cur, req)
+	if err != nil {
+		if domain.CodeOf(err) == domain.CodeNotAllowed {
+			s.record(ctx, by.ID, audit.Anomaly, map[string]string{"request": string(id), "unsigned_or_bad_approval": err.Error()})
+		}
+		return domain.Request{}, err
+	}
+	via := m
+	if signedBy != "" {
+		m = domain.MethodTouchID
 	}
 	item, err := s.vault.Lookup(ctx, cur.Ref)
 	if err != nil {
@@ -246,6 +264,10 @@ func (s *Service) Decide(ctx context.Context, by domain.Client, id domain.Reques
 		detail := map[string]string{"request": string(id), "decision": string(eff), "method": string(m), "ref": cur.Ref.String()}
 		if eff != d {
 			detail["asked"] = string(d)
+		}
+		if signedBy != "" {
+			detail["key"] = signedBy
+			detail["via"] = string(via)
 		}
 		if status == domain.StatusApproved {
 			var usesLeft any // NULL: timed grant

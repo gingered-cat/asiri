@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -55,6 +56,13 @@ func TestFetchVerifies(t *testing.T) {
 	}
 	if _, err := src.Fetch(ctx, "latest; rm -rf"); err == nil {
 		t.Fatal("bad tag accepted")
+	}
+	// Releases before v0.2.0 have no Touch ID helper.
+	if _, err := src.FetchHelper(ctx, "v0.2.0"); !errors.Is(err, ErrNoAsset) {
+		t.Fatalf("helper missing from the release: %v", err)
+	}
+	if HelperAssetName("v0.2.0", "arm64") != "asiri-touchid-v0.2.0-darwin-arm64" {
+		t.Fatal(HelperAssetName("v0.2.0", "arm64"))
 	}
 }
 

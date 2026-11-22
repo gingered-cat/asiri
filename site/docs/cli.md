@@ -68,6 +68,31 @@ Use a request ID with `approve` or `deny`. Use a grant ID with `revoke`. A grant
 
 `revoke --all` also denies pending requests. It cannot take back a value already delivered to a process.
 
+## Touch ID approvals
+
+On a Mac, you can make every approval need Touch ID or your Mac password. Then your owner profile alone can't approve. An agent that runs `asiri approve` as you can't approve its own request.
+
+```sh
+asiri touchid enroll    # makes a key in this Mac's Secure Enclave, then asks for Touch ID once
+asiri touchid status    # the helper, this Mac's key, and the keys the server accepts
+```
+
+After you enroll, `asiri approve` and the Rex plugin open a macOS prompt that says what you allow, for example "allow claude to use asiri://dev/github with /opt/homebrew/bin/gh once". Confirm with Touch ID. When Touch ID can't be used, for example with the lid closed, confirm with your password. If you cancel, nothing is approved and the request keeps waiting. Denying never asks.
+
+The key's private half never leaves the Secure Enclave. The server checks every approval against the enrolled public key, and a signature only works for the request and the duration it was made for.
+
+The prompt names the program that asks. Confirm only prompts from `asiri-touchid`.
+
+If you lose or replace the Mac, reset where the server runs, then enroll again on the new Mac:
+
+```sh
+docker compose -f deploy/compose.yaml exec asiri asiri server reset-approval-keys
+```
+
+A second key can only be added if an enrolled key signs for it, or after a reset.
+
+Touch ID protects approvals that go through asiri. It does not protect against a program that can change the server itself: its data directory, or its container if your user can run Docker.
+
 ## ssh keys
 
 First connect to your SSH host normally and verify its host key. Then generate an asiri key bound to that host:
@@ -117,7 +142,7 @@ asiri update --check                           # is a newer release out?
 asiri update                                   # replace this binary with it
 ```
 
-`asiri update` downloads the release for your OS and chip, checks it against the release's `checksums.txt`, and swaps it in place of the running binary. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with `docker compose -f deploy/compose.yaml pull` and `up -d`. A development build refuses to replace itself unless you pass `--force`; so does an older `--version`. `v0.1.0` predates `asiri update`, so run the install script once to get it.
+`asiri update` downloads the release for your OS and chip, checks it against the release's `checksums.txt`, and swaps it in place of the running binary. On macOS it also installs `asiri-touchid`, the Touch ID helper, next to it. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with `docker compose -f deploy/compose.yaml pull` and `up -d`. A development build refuses to replace itself unless you pass `--force`; so does an older `--version`. `v0.1.0` predates `asiri update`, so run the install script once to get it.
 
 ## exit codes
 

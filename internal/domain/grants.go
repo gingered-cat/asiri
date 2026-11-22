@@ -75,11 +75,14 @@ const (
 	MethodTTY  Method = "tty"
 	MethodCLI  Method = "cli"
 	MethodWait Method = "wait"
+	// MethodTouchID: signed by an enrolled approval key, which took Touch ID
+	// or the Mac's password.
+	MethodTouchID Method = "touchid"
 )
 
 func (m Method) Valid() bool {
 	switch m {
-	case MethodRex, MethodTTY, MethodCLI, MethodWait:
+	case MethodRex, MethodTTY, MethodCLI, MethodWait, MethodTouchID:
 		return true
 	}
 	return false
@@ -188,4 +191,15 @@ func SSHHostAllowed(hosts []string, fp string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// ApprovalKey is an enrolled Secure Enclave key whose signature an "allow"
+// decision needs. PublicKey is PKIX DER; ID is approvalkey.ID(PublicKey).
+type ApprovalKey struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	ClientID  ClientID   `json:"client_id"`
+	PublicKey []byte     `json:"public_key"`
+	CreatedAt time.Time  `json:"created_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }

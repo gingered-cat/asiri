@@ -115,6 +115,19 @@ asiri revoke --all
 </code></pre>
 <p>Use a request ID with <code>approve</code> or <code>deny</code>. Use a grant ID with <code>revoke</code>. A grant lets the same program reuse an approved secret until expiry or revocation.</p>
 <p><code>revoke --all</code> also denies pending requests. It cannot take back a value already delivered to a process.</p>
+<h2 id="touch-id-approvals">Touch ID approvals</h2>
+<p>On a Mac, you can make every approval need Touch ID or your Mac password. Then your owner profile alone can't approve. An agent that runs <code>asiri approve</code> as you can't approve its own request.</p>
+<pre><code class="language-sh">asiri touchid enroll    # makes a key in this Mac's Secure Enclave, then asks for Touch ID once
+asiri touchid status    # the helper, this Mac's key, and the keys the server accepts
+</code></pre>
+<p>After you enroll, <code>asiri approve</code> and the Rex plugin open a macOS prompt that says what you allow, for example &quot;allow claude to use asiri://dev/github with /opt/homebrew/bin/gh once&quot;. Confirm with Touch ID. When Touch ID can't be used, for example with the lid closed, confirm with your password. If you cancel, nothing is approved and the request keeps waiting. Denying never asks.</p>
+<p>The key's private half never leaves the Secure Enclave. The server checks every approval against the enrolled public key, and a signature only works for the request and the duration it was made for.</p>
+<p>The prompt names the program that asks. Confirm only prompts from <code>asiri-touchid</code>.</p>
+<p>If you lose or replace the Mac, reset where the server runs, then enroll again on the new Mac:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml exec asiri asiri server reset-approval-keys
+</code></pre>
+<p>A second key can only be added if an enrolled key signs for it, or after a reset.</p>
+<p>Touch ID protects approvals that go through asiri. It does not protect against a program that can change the server itself: its data directory, or its container if your user can run Docker.</p>
 <h2 id="ssh-keys">ssh keys</h2>
 <p>First connect to your SSH host normally and verify its host key. Then generate an asiri key bound to that host:</p>
 <pre><code class="language-sh">asiri add ops/staging --ssh-generate --ssh-hosts staging
@@ -143,7 +156,7 @@ asiri log verify
 asiri update --check                           # is a newer release out?
 asiri update                                   # replace this binary with it
 </code></pre>
-<p><code>asiri update</code> downloads the release for your OS and chip, checks it against the release's <code>checksums.txt</code>, and swaps it in place of the running binary. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with <code>docker compose -f deploy/compose.yaml pull</code> and <code>up -d</code>. A development build refuses to replace itself unless you pass <code>--force</code>; so does an older <code>--version</code>. <code>v0.1.0</code> predates <code>asiri update</code>, so run the install script once to get it.</p>
+<p><code>asiri update</code> downloads the release for your OS and chip, checks it against the release's <code>checksums.txt</code>, and swaps it in place of the running binary. On macOS it also installs <code>asiri-touchid</code>, the Touch ID helper, next to it. If the Rex plugin uses this binary, it reinstalls the plugin from the new version. The server is a separate process: update its container with <code>docker compose -f deploy/compose.yaml pull</code> and <code>up -d</code>. A development build refuses to replace itself unless you pass <code>--force</code>; so does an older <code>--version</code>. <code>v0.1.0</code> predates <code>asiri update</code>, so run the install script once to get it.</p>
 <h2 id="exit-codes">exit codes</h2>
 <table>
 <thead>
@@ -202,6 +215,8 @@ asiri update                                   # replace this binary with it
           </li>
           
           <li><a href="#requests-and-grants">requests and grants</a></li>
+          
+          <li><a href="#touch-id-approvals">Touch ID approvals</a></li>
           
           <li><a href="#ssh-keys">ssh keys</a></li>
           
@@ -296,6 +311,9 @@ asiri update                                   # replace this binary with it
         <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
         
       
+        <a href="/docs/cli/#touch-id-approvals">cli usage / Touch ID approvals</a>
+        
+      
         <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
         
       
@@ -321,6 +339,9 @@ asiri update                                   # replace this binary with it
         <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
       
         <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#replacing-a-mac-with-touch-id-approvals">self-hosting / replacing a Mac with Touch ID approvals</a>
         
       
         <a href="/docs/self-hosting/#updating">self-hosting / updating</a>

@@ -50,6 +50,10 @@ func New(svc *service.Service, log *slog.Logger) *Server {
 	s.handle("GET /v1/requests", owner, s.pendingRequests)
 	s.handle("GET /v1/requests/{id}", anyone, s.getRequest)
 	s.handle("POST /v1/requests/{id}/decision", anyone, s.decide)
+	s.handle("GET /v1/requests/{id}/challenge", owner, s.approvalChallenge)
+	s.handle("GET /v1/approval-keys", owner, s.listApprovalKeys)
+	s.handle("POST /v1/approval-keys", owner, s.enrollApprovalKey)
+	s.handle("POST /v1/approval-keys/challenge", owner, s.enrollChallenge)
 	s.handle("GET /v1/grants", owner, s.listGrants)
 	s.handle("POST /v1/grants/{id}/redeem", anyone, s.redeem)
 	s.handle("POST /v1/grants/{id}/scrub", anyone, s.scrub)
@@ -404,12 +408,59 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	out, err := s.svc.Decide(r.Context(), clientFrom(r.Context()), domain.RequestID(r.PathValue("id")), req.Decision, req.Method)
+	out, err := s.svc.Decide(r.Context(), clientFrom(r.Context()), domain.RequestID(r.PathValue("id")), req)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, api.RequestResponse{Request: out})
+}
+
+func (s *Server) approvalChallenge(w http.ResponseWriter, r *http.Request) {
+	out, err := s.svc.ApprovalChallenge(r.Context(), clientFrom(r.Context()), domain.RequestID(r.PathValue("id")),
+		domain.Decision(r.URL.Query().Get("decision")))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listApprovalKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := s.svc.ApprovalKeys(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.ApprovalKeysResponse{Keys: keys})
+}
+
+func (s *Server) enrollChallenge(w http.ResponseWriter, r *http.Request) {
+	var req api.EnrollChallengeRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	out, err := s.svc.EnrollChallenge(r.Context(), clientFrom(r.Context()), req.PublicKey)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) enrollApprovalKey(w http.ResponseWriter, r *http.Request) {
+	var req api.EnrollApprovalKeyRequest
+	if err := readJSON(w, r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	k, err := s.svc.EnrollApprovalKey(r.Context(), clientFrom(r.Context()), req)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, k)
 }
 
 func (s *Server) listGrants(w http.ResponseWriter, r *http.Request) {
