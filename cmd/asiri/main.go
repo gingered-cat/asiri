@@ -40,7 +40,7 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"server":    {"server <init|run|keygen|pair-code|health> ...", "run or set up the server (in the container)", serverCmd},
+		"server":    {"server <init|run|keygen|pair-code|health|reset-approval-keys> ...", "run or set up the server (in the container)", serverCmd},
 		"pair":      {"pair --code CODE [--server URL] [--profile P] [--force]", "pair this machine with a server", pairCmd},
 		"add":       {"add REF [--kind K] [--stdin]", "store a secret (typed without echo, or from stdin)", addCmd},
 		"ls":        {"ls [QUERY] [--json]", "list secrets (names only, never values)", lsCmd},
@@ -63,6 +63,7 @@ func init() {
 		"pending":   {"pending [--json]", "list requests waiting for approval", pendingCmd},
 		"rex":       {"rex <install|uninstall|status> [--profile owner]", "add asiri to Rex's command palette for approvals", rexCmd},
 		"revoke":    {"revoke ID | --all", "revoke a grant, or everything (kill switch)", revokeCmd},
+		"touchid":   {"touchid <enroll [--name NAME] | status> [--profile owner]", "make approvals need Touch ID or your Mac password (macOS)", touchidCmd},
 		"update":    {"update [--check] [--version vX.Y.Z] [--force]", "replace this binary with the latest verified release", updateCmd},
 		"version":   {"version", "print the version", func(context.Context, []string) error { fmt.Println("asiri", server.Version); return nil }},
 	}

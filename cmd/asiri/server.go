@@ -41,6 +41,8 @@ func serverCmd(ctx context.Context, args []string) error {
 		return serverPairCode(ctx, rest)
 	case "health":
 		return serverHealth(ctx, rest)
+	case "reset-approval-keys":
+		return serverResetApprovalKeys(ctx, rest)
 	}
 	return usageError{fmt.Sprintf("unknown server subcommand %q", sub)}
 }
@@ -308,5 +310,29 @@ func serverHealth(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("ok %s initialized=%t sealed=%t\n", h.Version, h.Initialized, h.Sealed)
+	return nil
+}
+
+// serverResetApprovalKeys revokes every approval key, for a lost or replaced
+// Mac. It works on the data directory directly, like pair-code, so it needs
+// access to where the server runs (docker compose exec asiri asiri server
+// reset-approval-keys), not just an owner profile.
+func serverResetApprovalKeys(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("server reset-approval-keys", flag.ContinueOnError)
+	var f serverFlags
+	f.register(fs)
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	o, err := openServer(&f)
+	if err != nil {
+		return err
+	}
+	defer o.store.Close()
+	n, err := o.svc.ResetApprovalKeys(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("revoked %d approval key(s); an owner profile can approve without Touch ID until you run `asiri touchid enroll` again\n", n)
 	return nil
 }

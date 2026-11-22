@@ -39,6 +39,8 @@ const (
 	RevokeAll    = "revoke_all"
 	ScrubHit     = "scrub_hit"
 	Anomaly      = "anomaly"
+	KeyEnroll    = "approval_key_enroll"
+	KeysReset    = "approval_keys_reset"
 )
 
 var genesis = make([]byte, sha256.Size)

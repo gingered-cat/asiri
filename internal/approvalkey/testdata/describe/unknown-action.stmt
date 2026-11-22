@@ -1,0 +1,12 @@
+asiri approval v1
+action: pay
+server: ab12
+request: r6
+client: claude
+client_id: c1
+secret: asiri://dev/wallet
+program: /usr/bin/x
+program_sha256: 00
+host: 
+decision: once
+expires: 2026-11-22T11:00:00Z

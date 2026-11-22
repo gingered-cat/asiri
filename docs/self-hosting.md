@@ -57,6 +57,16 @@ docker compose -f deploy/compose.yaml start asiri
 
 Choose a new backup destination each time. Protect that directory and test recovery on an isolated machine before depending on it. Do not use `docker compose down -v`: it deletes the vault volume.
 
+## replacing a Mac with Touch ID approvals
+
+If you enrolled [Touch ID approvals](/docs/cli/#touch-id-approvals) and lose or replace that Mac, only someone who can run commands where the server runs can remove the key:
+
+```sh
+docker compose -f deploy/compose.yaml exec asiri asiri server reset-approval-keys
+```
+
+Until you run `asiri touchid enroll` again, an owner profile can approve without Touch ID.
+
 ## updating
 
 Make a backup before updating. Review the source changes and any migration instructions. Rebuild the host CLI and the server from the same revision:

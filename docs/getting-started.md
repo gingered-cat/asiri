@@ -94,6 +94,8 @@ If Rex is available, the request appears there. Otherwise a human-run command ca
 
 Never give an agent your owner profile to remove this step. See [setups](/docs/setups/) for a separate agent profile.
 
+On a Mac, run `asiri touchid enroll`. Then every approval needs Touch ID or your Mac password, so even an agent that reaches your owner profile can't approve. See [Touch ID approvals](/docs/cli/#touch-id-approvals).
+
 ### what to do next
 
 Set up [Rex approvals](/docs/rex/) for decisions in your workspace. Read [CLI usage](/docs/cli/) for delivery options and [self-hosting](/docs/self-hosting/) before changing storage or network access.

@@ -126,6 +126,7 @@ asiri run --env GH_TOKEN=asiri://dev/github \
 <h3 id="if-the-command-waits">if the command waits</h3>
 <p>If Rex is available, the request appears there. Otherwise a human-run command can ask in the terminal. An agent request waits for you to run the printed <code>asiri approve ID</code> command in your own terminal.</p>
 <p>Never give an agent your owner profile to remove this step. See <a href="/docs/setups/">setups</a> for a separate agent profile.</p>
+<p>On a Mac, run <code>asiri touchid enroll</code>. Then every approval needs Touch ID or your Mac password, so even an agent that reaches your owner profile can't approve. See <a href="/docs/cli/#touch-id-approvals">Touch ID approvals</a>.</p>
 <h3 id="what-to-do-next">what to do next</h3>
 <p>Set up <a href="/docs/rex/">Rex approvals</a> for decisions in your workspace. Read <a href="/docs/cli/">CLI usage</a> for delivery options and <a href="/docs/self-hosting/">self-hosting</a> before changing storage or network access.</p>
 </article>
@@ -244,6 +245,9 @@ asiri run --env GH_TOKEN=asiri://dev/github \
         <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
         
       
+        <a href="/docs/cli/#touch-id-approvals">cli usage / Touch ID approvals</a>
+        
+      
         <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
         
       
@@ -269,6 +273,9 @@ asiri run --env GH_TOKEN=asiri://dev/github \
         <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
       
         <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#replacing-a-mac-with-touch-id-approvals">self-hosting / replacing a Mac with Touch ID approvals</a>
         
       
         <a href="/docs/self-hosting/#updating">self-hosting / updating</a>

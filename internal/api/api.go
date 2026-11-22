@@ -100,9 +100,41 @@ type RequestsResponse struct {
 	Requests []domain.Request `json:"requests"`
 }
 
+// DecisionRequest records a decision. Once an approval key is enrolled, an
+// allow also needs Signature: KeyID's signature over the request's statement
+// (ApprovalChallenge.Statement), ASN.1 DER.
 type DecisionRequest struct {
-	Decision domain.Decision `json:"decision"`
-	Method   domain.Method   `json:"method"`
+	Decision  domain.Decision `json:"decision"`
+	Method    domain.Method   `json:"method"`
+	KeyID     string          `json:"key_id,omitempty"`
+	Signature []byte          `json:"signature,omitempty"`
+}
+
+// ApprovalChallenge is a statement to sign. Required says whether the server
+// needs it signed (an approval key is enrolled); KeyIDs are the live keys.
+type ApprovalChallenge struct {
+	Statement []byte   `json:"statement"`
+	Required  bool     `json:"required"`
+	KeyIDs    []string `json:"key_ids"`
+}
+
+type EnrollChallengeRequest struct {
+	PublicKey []byte `json:"public_key"`
+}
+
+// EnrollApprovalKeyRequest adds a key. Proof is the new key's signature over
+// the enroll statement; once a key is enrolled, EndorsedBy's signature over
+// the same statement is needed too.
+type EnrollApprovalKeyRequest struct {
+	Name        string `json:"name"`
+	PublicKey   []byte `json:"public_key"`
+	Proof       []byte `json:"proof"`
+	EndorsedBy  string `json:"endorsed_by,omitempty"`
+	Endorsement []byte `json:"endorsement,omitempty"`
+}
+
+type ApprovalKeysResponse struct {
+	Keys []domain.ApprovalKey `json:"keys"`
 }
 
 // RedeemResponse carries a value. Value is base64 in JSON.

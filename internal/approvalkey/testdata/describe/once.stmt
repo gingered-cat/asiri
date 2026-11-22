@@ -1,0 +1,12 @@
+asiri approval v1
+action: use
+server: ab12
+request: r1
+client: claude
+client_id: c1
+secret: asiri://dev/github
+program: /opt/homebrew/bin/gh
+program_sha256: 00ff
+host: 
+decision: once
+expires: 2026-11-22T11:00:00Z

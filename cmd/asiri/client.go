@@ -12,6 +12,7 @@ import (
 	"github.com/gingered-cat/asiri/internal/api"
 	"github.com/gingered-cat/asiri/internal/client"
 	"github.com/gingered-cat/asiri/internal/domain"
+	"github.com/gingered-cat/asiri/internal/touchid"
 )
 
 func profileFlag(fs *flag.FlagSet) *string {
@@ -24,7 +25,14 @@ func connect(profile string) (*client.Client, *client.Profile, error) {
 		return nil, nil, err
 	}
 	c, err := client.New(p)
-	return c, p, err
+	if err != nil {
+		return nil, nil, err
+	}
+	// On a Mac with an approval key, allow decisions get signed (Touch ID).
+	if k := touchid.ForProfile(p); k != nil {
+		c.Signer = k
+	}
+	return c, p, nil
 }
 
 func pairCmd(ctx context.Context, args []string) error {

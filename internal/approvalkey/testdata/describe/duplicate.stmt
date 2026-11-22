@@ -1,0 +1,10 @@
+asiri approval v1
+action: use
+server: ab12
+request: r4
+client: claude
+client_id: c1
+secret: asiri://dev/github
+program: /usr/bin/gh
+decision: once
+decision: 1h

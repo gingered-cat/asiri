@@ -1,0 +1,12 @@
+asiri approval v1
+action: ssh
+server: ab12
+request: r7
+client: claude
+client_id: c1
+secret: asiri://prod/deploy-key
+program: /usr/bin/ssh
+program_sha256: 00
+host: 
+decision: once
+expires: 2026-11-22T11:00:00Z

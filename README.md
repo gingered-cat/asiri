@@ -4,7 +4,7 @@ let agents use secrets without seeing them.
 
 *àṣírí* is Yoruba for "secret". An agent asks for `asiri://dev/github`, you approve, and asiri hands the value to the command that needs it. The agent gets the result, never the secret.
 
-> **status: v0.1.0.** Encrypted vault, pairing, `asiri run`, Rex approvals, host-bound SSH keys, Apple and Google CSV import, and an MCP server with an agent skill. Binaries and the container image are published from the `v0.1.0` tag. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **status: v0.2.** Encrypted vault, pairing, `asiri run`, Rex approvals, Touch ID approvals signed in the Secure Enclave, host-bound SSH keys, Apple and Google CSV import, and an MCP server with an agent skill. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 01 run the server
 
@@ -90,6 +90,14 @@ asiri: waiting for approval (until 17:07:42). in your terminal, run:
 
   asiri approve 01M7WV9QAXVYMTM68PR5WQA8SW
 ```
+
+### make approvals need Touch ID (macOS)
+
+```sh
+asiri touchid enroll
+```
+
+This makes a key in your Mac's Secure Enclave and registers it with the server. From then on, allowing a request takes Touch ID, or your Mac password when Touch ID can't be used. The macOS prompt says exactly what you allow ("allow claude to use asiri://dev/github with /opt/homebrew/bin/gh once"), and the server checks the signature against that request and that duration. Holding your owner profile is no longer enough to approve, so an agent that runs `asiri approve` as you gets a Touch ID prompt it can't answer. Denying never asks. Lost the Mac? `asiri server reset-approval-keys` where the server runs, then enroll again.
 
 ## 06 ssh without handing out the key
 

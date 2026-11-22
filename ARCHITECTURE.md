@@ -2,9 +2,9 @@
 
 Asiri lets an AI agent **use** a secret without **seeing** it. The agent asks by reference (`asiri://dev/github`), the person approves, and Asiri delivers the value straight to the process that needs it. The agent gets the result back, never the value.
 
-This document covers v0.1: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
+This document covers v0.1 and v0.2: one person, one machine, one or a few agents. Product scope and milestones are in the design note; this file covers how the system is built and why.
 
-Status: v0.1.0. M1–M6 are on `main`: vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, Rex approvals, host-bound SSH keys, Apple/Google CSV import, MCP server and agent skill. Release assets come from the `v0.1.0` tag. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
+Status: v0.2 adds signed approvals (Touch ID, see §11). M1–M6 are on `main`: vault, server, pairing, `add`/`ls`, grants, `asiri run`, scrubbing, Rex approvals, host-bound SSH keys, Apple/Google CSV import, MCP server and agent skill. Release assets come from the `v0.1.0` tag. Decided 2026-11-20: Apache-2.0, port 7420, a bare Return on an approval means "allow once".
 
 ---
 
@@ -194,7 +194,7 @@ sequenceDiagram
   P->>CLI: asiri pair --server https://127.0.0.1:7420 --code ...
   CLI->>S: TLS (no client cert) → check CA fingerprint prefix
   CLI->>S: POST /v1/pair {code, csr}
-  S-->>CLI: client cert (role in SAN URI asiri://role/owner), CA cert
+  S-->>CLI: client cert (CN = client name), CA cert; the server finds the client and its role by the cert's fingerprint
   CLI->>CLI: ~/.config/asiri/owner/{client.key, client.crt, ca.crt} 0600
 ```
 
@@ -602,11 +602,36 @@ Lock order: never hold the broker or limiter mutex while in a DB transaction. Pu
 | Long polling | WebSocket / SSE | decisions are rare and short-lived; plain HTTP is simpler | a held connection per waiting request (a handful) |
 | Allow-lists + scrubbing | full sandboxing of the child | works today on stock macOS | an allowed binary with its own exfil path (e.g. `gh gist create`) is still a gap |
 | `--env` supported | stdin/file only | many tools only read env | env visible to same-user processes via `ps eww` while the child runs; docs say prefer stdin/file |
-| Owner-profile approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | agents can't decide through the API, but a process running as the person can read the owner profile's key and approve; fixed in v0.2 (see below) |
+| Owner-profile approvals (v0.1) | Secure Enclave signed approvals | ship the loop first | agents can't decide through the API, but a process running as the person could read the owner profile's key and approve; closed by v0.2 once a key is enrolled (see below) |
+| Swift helper (`asiri-touchid`) for the Secure Enclave | cgo in the main binary | the Go binary stays pure Go and cross-compiles from Linux; Apple frameworks live in about 150 lines of Swift | a second file to install on macOS (the install script and `asiri update` do it) |
 | One binary | separate server and client builds | one release, one version, shared `domain` | server code in the client binary (a few MB) |
 
 ### v0.2: signed approvals
-`Approver` gets a fourth implementation: a small signed macOS helper holding an approval key in the Secure Enclave, Touch ID on every signature. `Decide` then requires `sig = Sign(request_id | item | bin_sha256 | host_fp | decision | expires_at)` from an enrolled key, so holding the owner profile's key is no longer enough. Rex stays as the notification and routing. No caller changes, because the interface already exists.
+Built. `asiri touchid enroll` creates a P-256 key in the Mac's Secure Enclave with the access control `.privateKeyUsage + .userPresence` (Touch ID, or the Mac password when Touch ID can't be used), proves it by signing an enrol statement, and registers its public key (`approval_keys` table, migration 004). From then on:
+
+- `Decide` refuses an allow unless it carries an ECDSA signature by a live key over the server's **approval statement** for that request and decision. A deny needs no signature. Refusals are audited as `anomaly`; signed decisions are recorded with method `touchid`, the key ID, and the method the client used (`via`).
+- The statement is built by the server (`internal/approvalkey`), one `key: value` line each, values with control characters quoted:
+
+  ```text
+  asiri approval v1
+  action: use            (or ssh; later kinds such as pay add new actions)
+  server: <CA fingerprint>
+  request: <id>
+  client: claude
+  client_id: <id>
+  secret: asiri://dev/github
+  program: /opt/homebrew/bin/gh
+  program_sha256: <hex>
+  host: <SSH host key fingerprint, or empty>
+  decision: once | 15m | 1h
+  expires: <RFC 3339>
+  ```
+
+- The client fetches it (`GET /v1/requests/{id}/challenge`) and hands it to `asiri-touchid sign`. The helper rebuilds the sentence it shows ("allow claude to use asiri://dev/github with /opt/homebrew/bin/gh once") from the statement itself, so what the person reads is what gets signed. It refuses anything that isn't an asiri statement, including actions it doesn't know. Go and Swift share the sentence rules; `internal/approvalkey/testdata/describe` keeps them in step (`go run ./dev touchid`, macOS CI).
+- A second key needs an endorsement signature by a live key. `asiri server reset-approval-keys` (no API route; needs access to the server's data directory) revokes all keys for a lost Mac.
+- The Rex plugin and `asiri approve` sign through `client.Signer`; nothing else in the approval chain changed.
+
+What it doesn't cover: the key handle file is usable by any process running as the person, so a native program could ask the Secure Enclave to sign with misleading prompt text (the macOS prompt names the requesting program; binding the key to a code signature needs a Developer ID-signed helper with keychain entitlements, later). And it protects approvals through asiri, not a server whose data directory or container the attacker can change.
 
 ---
 

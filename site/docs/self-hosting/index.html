@@ -107,6 +107,11 @@ docker compose -f deploy/compose.yaml cp asiri:/data ./asiri-backup
 docker compose -f deploy/compose.yaml start asiri
 </code></pre>
 <p>Choose a new backup destination each time. Protect that directory and test recovery on an isolated machine before depending on it. Do not use <code>docker compose down -v</code>: it deletes the vault volume.</p>
+<h2 id="replacing-a-mac-with-touch-id-approvals">replacing a Mac with Touch ID approvals</h2>
+<p>If you enrolled <a href="/docs/cli/#touch-id-approvals">Touch ID approvals</a> and lose or replace that Mac, only someone who can run commands where the server runs can remove the key:</p>
+<pre><code class="language-sh">docker compose -f deploy/compose.yaml exec asiri asiri server reset-approval-keys
+</code></pre>
+<p>Until you run <code>asiri touchid enroll</code> again, an owner profile can approve without Touch ID.</p>
 <h2 id="updating">updating</h2>
 <p>Make a backup before updating. Review the source changes and any migration instructions. Rebuild the host CLI and the server from the same revision:</p>
 <pre><code class="language-sh">go run ./dev bin
@@ -144,6 +149,8 @@ asiri status
           </li>
           
           <li><a href="#persistence-and-backups">persistence and backups</a></li>
+          
+          <li><a href="#replacing-a-mac-with-touch-id-approvals">replacing a Mac with Touch ID approvals</a></li>
           
           <li><a href="#updating">updating</a></li>
           
@@ -232,6 +239,9 @@ asiri status
         <a href="/docs/cli/#requests-and-grants">cli usage / requests and grants</a>
         
       
+        <a href="/docs/cli/#touch-id-approvals">cli usage / Touch ID approvals</a>
+        
+      
         <a href="/docs/cli/#ssh-keys">cli usage / ssh keys</a>
         
       
@@ -257,6 +267,9 @@ asiri status
         <a href="/docs/self-hosting/#key-file-mode">self-hosting / key-file mode</a><a href="/docs/self-hosting/#passphrase-mode">self-hosting / passphrase mode</a>
       
         <a href="/docs/self-hosting/#persistence-and-backups">self-hosting / persistence and backups</a>
+        
+      
+        <a href="/docs/self-hosting/#replacing-a-mac-with-touch-id-approvals">self-hosting / replacing a Mac with Touch ID approvals</a>
         
       
         <a href="/docs/self-hosting/#updating">self-hosting / updating</a>

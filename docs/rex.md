@@ -47,6 +47,8 @@ Return allows once. Closing the prompt denies. When several Rex apps show the re
 
 The plugin records the answer using your owner profile. The requesting agent cannot approve itself. Longer grants are still limited by the secret's `--max-grant` policy.
 
+With [Touch ID approvals](/docs/cli/#touch-id-approvals), choosing an Allow option opens a macOS prompt that says exactly what you allow. Confirm it with Touch ID or your password. Deny needs no confirmation.
+
 ## use the command palette
 
 Press `Cmd+Shift+P` in Rex and type `asiri`:

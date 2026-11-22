@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/gingered-cat/asiri/internal/client"
 	"github.com/gingered-cat/asiri/internal/rexplug"
 	"github.com/gingered-cat/asiri/internal/server"
+	"github.com/gingered-cat/asiri/internal/touchid"
 	"github.com/gingered-cat/asiri/internal/update"
 )
 
@@ -53,6 +55,9 @@ func updateCmd(ctx context.Context, args []string) error {
 	switch {
 	case target == current && !*force:
 		fmt.Printf("asiri %s is up to date\n", current)
+		if bin, err := installedBinary(); err == nil {
+			installHelper(ctx, src, target, bin, false)
+		}
 		return nil
 	case !update.IsRelease(current) && !*force:
 		return fmt.Errorf("this asiri is a development build (%s); pass --force to replace it with %s", current, target)
@@ -60,15 +65,9 @@ func updateCmd(ctx context.Context, args []string) error {
 		return fmt.Errorf("%s is older than this asiri (%s); pass --force to downgrade", target, current)
 	}
 
-	bin, err := os.Executable()
+	bin, err := installedBinary()
 	if err != nil {
 		return err
-	}
-	if bin, err = filepath.EvalSymlinks(bin); err != nil {
-		return err
-	}
-	if strings.Contains(bin, "go-build") {
-		return errors.New("this asiri was started with `go run`; there is no installed binary to update")
 	}
 	fmt.Printf("downloading %s for %s\n", target, update.AssetName(target, src.GOOSOrRuntime(), src.GOARCHOrRuntime()))
 	b, err := src.Fetch(ctx, target)
@@ -79,6 +78,7 @@ func updateCmd(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("updated %s: %s → %s (checksum verified)\n", bin, current, target)
+	installHelper(ctx, src, target, bin, true)
 
 	// The Rex plugin is embedded in the binary: let the new binary rewrite it.
 	if rexBin, profile, ok := rexplug.InstalledWith(); ok && sameFile(rexBin, bin) {
@@ -105,4 +105,30 @@ func sameFile(a, b string) bool {
 	fa, err1 := os.Stat(a)
 	fb, err2 := os.Stat(b)
 	return err1 == nil && err2 == nil && os.SameFile(fa, fb)
+}
+
+// installHelper puts the Touch ID helper next to bin on macOS, verified
+// against the release's checksums. refresh replaces an existing one;
+// otherwise it is only installed when missing. Releases before v0.2.0 have
+// no helper, which is not an error.
+func installHelper(ctx context.Context, src update.Source, version, bin string, refresh bool) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	dst := filepath.Join(filepath.Dir(bin), touchid.HelperName)
+	if _, err := os.Stat(dst); err == nil && !refresh {
+		return
+	}
+	b, err := src.FetchHelper(ctx, version)
+	if errors.Is(err, update.ErrNoAsset) {
+		return
+	}
+	if err == nil {
+		err = update.Replace(dst, b)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "asiri: couldn't install the Touch ID helper: %v\n", err)
+		return
+	}
+	fmt.Printf("installed %s (checksum verified)\n", dst)
 }

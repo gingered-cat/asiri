@@ -1,0 +1,1 @@
+allow claude to use asiri://dev/github with "/tmp/gh\ndecision: once" for 15 minutes
