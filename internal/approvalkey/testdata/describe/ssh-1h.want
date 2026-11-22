@@ -1,0 +1,1 @@
+allow claude to sign in to host SHA256:abc with asiri://prod/deploy-key using /usr/bin/ssh for 1 hour

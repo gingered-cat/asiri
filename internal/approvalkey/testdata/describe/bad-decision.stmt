@@ -1,0 +1,9 @@
+asiri approval v1
+action: use
+server: ab12
+request: r5
+client: claude
+client_id: c1
+secret: asiri://dev/github
+program: /usr/bin/gh
+decision: forever

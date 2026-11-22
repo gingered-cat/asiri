@@ -17,6 +17,7 @@ import (
 	"github.com/gingered-cat/asiri/internal/domain"
 	"github.com/gingered-cat/asiri/internal/rexplug"
 	"github.com/gingered-cat/asiri/internal/run"
+	"github.com/gingered-cat/asiri/internal/touchid"
 )
 
 // exitStatus ends asiri with a child's exit code, printing nothing.
@@ -248,6 +249,9 @@ func decideOne(ctx context.Context, c decider, id domain.RequestID, d domain.Dec
 
 func decide(ctx context.Context, c decider, id domain.RequestID, d domain.Decision, m domain.Method) error {
 	rq, err := c.Decide(ctx, id, d, m)
+	if errors.Is(err, touchid.ErrNotApproved) {
+		return fmt.Errorf("%w. Request %s is still waiting: approve it again, or `asiri deny %s`", err, id, id)
+	}
 	if err != nil {
 		return err
 	}

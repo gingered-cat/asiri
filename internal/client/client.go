@@ -25,6 +25,17 @@ import (
 type Client struct {
 	base string
 	http *http.Client
+	// Signer signs approval statements when the server needs signed
+	// approvals. Nil means this machine has no approval key.
+	Signer Signer
+}
+
+// Signer signs approval statements with an approval key. On macOS it is the
+// Secure Enclave helper: Sign shows the person what the statement allows and
+// waits for Touch ID or the Mac's password.
+type Signer interface {
+	KeyID(ctx context.Context) (string, error)
+	Sign(ctx context.Context, statement []byte) ([]byte, error)
 }
 
 func New(p *Profile) (*Client, error) {
@@ -269,9 +280,23 @@ func (c *Client) PendingRequests(ctx context.Context) ([]domain.Request, error) 
 
 // Decide records a decision. On a conflict it returns the request as it now
 // stands along with the error.
+//
+// An allow on a server with an approval key enrolled is signed first: the
+// server's statement of the request goes to c.Signer, which asks the person
+// for Touch ID. A deny is never signed.
 func (c *Client) Decide(ctx context.Context, id domain.RequestID, d domain.Decision, m domain.Method) (domain.Request, error) {
+	req := api.DecisionRequest{Decision: d, Method: m}
+	if d != domain.DecideDeny {
+		// Errors here (an agent profile, a server older than v0.2) fall
+		// through: the decision call reports what is wrong.
+		if ch, err := c.ApprovalChallenge(ctx, id, d); err == nil && ch.Required {
+			if err := c.signApproval(ctx, ch, &req); err != nil {
+				return domain.Request{}, err
+			}
+		}
+	}
 	var r api.RequestResponse
-	err := c.do(ctx, "POST", "/v1/requests/"+url.PathEscape(string(id))+"/decision", api.DecisionRequest{Decision: d, Method: m}, &r)
+	err := c.do(ctx, "POST", "/v1/requests/"+url.PathEscape(string(id))+"/decision", req, &r)
 	if domain.CodeOf(err) == domain.CodeConflict {
 		cur, gerr := c.Request(ctx, id, 0)
 		if gerr == nil {
@@ -310,4 +335,53 @@ func (c *Client) RevokeAll(ctx context.Context) (int, error) {
 func (c *Client) Import(ctx context.Context, req api.ImportRequest) (api.ImportResult, error) {
 	var r api.ImportResult
 	return r, c.do(ctx, "POST", "/v1/import", req, &r)
+}
+
+// ErrNoApprovalKey means the server needs signed approvals and this machine
+// can't sign them.
+var ErrNoApprovalKey = errors.New("approvals on this server need Touch ID, and this machine has no approval key; see `asiri touchid status`")
+
+func (c *Client) signApproval(ctx context.Context, ch api.ApprovalChallenge, req *api.DecisionRequest) error {
+	if c.Signer == nil {
+		return ErrNoApprovalKey
+	}
+	keyID, err := c.Signer.KeyID(ctx)
+	if err != nil {
+		return err
+	}
+	enrolled := false
+	for _, k := range ch.KeyIDs {
+		enrolled = enrolled || k == keyID
+	}
+	if !enrolled {
+		return fmt.Errorf("this machine's approval key %s isn't enrolled on the server (enrolled: %s); run `asiri touchid enroll`",
+			keyID, strings.Join(ch.KeyIDs, ", "))
+	}
+	sig, err := c.Signer.Sign(ctx, ch.Statement)
+	if err != nil {
+		return err
+	}
+	req.KeyID, req.Signature = keyID, sig
+	return nil
+}
+
+// ApprovalChallenge returns the statement that allows request id with d.
+func (c *Client) ApprovalChallenge(ctx context.Context, id domain.RequestID, d domain.Decision) (api.ApprovalChallenge, error) {
+	var ch api.ApprovalChallenge
+	return ch, c.do(ctx, "GET", "/v1/requests/"+url.PathEscape(string(id))+"/challenge?decision="+url.QueryEscape(string(d)), nil, &ch)
+}
+
+func (c *Client) ApprovalKeys(ctx context.Context) ([]domain.ApprovalKey, error) {
+	var r api.ApprovalKeysResponse
+	return r.Keys, c.do(ctx, "GET", "/v1/approval-keys", nil, &r)
+}
+
+func (c *Client) EnrollChallenge(ctx context.Context, publicKey []byte) (api.ApprovalChallenge, error) {
+	var ch api.ApprovalChallenge
+	return ch, c.do(ctx, "POST", "/v1/approval-keys/challenge", api.EnrollChallengeRequest{PublicKey: publicKey}, &ch)
+}
+
+func (c *Client) EnrollApprovalKey(ctx context.Context, req api.EnrollApprovalKeyRequest) (domain.ApprovalKey, error) {
+	var k domain.ApprovalKey
+	return k, c.do(ctx, "POST", "/v1/approval-keys", req, &k)
 }

@@ -23,10 +23,10 @@ function M.setup(opts)
   local env = { ASIRI_PROFILE = opts.profile or "owner" }
 
   -- Runs asiri; returns its stdout, or nil and what went wrong.
-  local function asiri(args)
+  local function asiri(args, timeout)
     local argv = { bin }
     for _, a in ipairs(args) do argv[#argv + 1] = a end
-    local r, err = rex.exec(argv, { env = env, timeout = 20 })
+    local r, err = rex.exec(argv, { env = env, timeout = timeout or 20 })
     if r == nil then return nil, err end
     if not r.ok then
       local msg = r.stderr ~= "" and r.stderr or r.stdout
@@ -37,7 +37,9 @@ function M.setup(opts)
 
   local function record(id, choice)
     if choice == "deny" then return asiri({ "deny", id }) end
-    return asiri({ "approve", id, "--for", choice })
+    -- With Touch ID approvals enrolled, approving waits for the person's
+    -- finger (or password) in the macOS prompt, so give it time.
+    return asiri({ "approve", id, "--for", choice }, 120)
   end
 
   -- Asks about one request and records the answer. The returned table is

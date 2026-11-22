@@ -107,14 +107,35 @@ func AssetName(version, goos, goarch string) string {
 	return "asiri-" + version + "-" + goos + "-" + goarch
 }
 
+// HelperAssetName is the Touch ID helper's release file (macOS only, from
+// v0.2.0).
+func HelperAssetName(version, goarch string) string {
+	return "asiri-touchid-" + version + "-darwin-" + goarch
+}
+
+// ErrNoAsset means the release exists but has no such file.
+var ErrNoAsset = errors.New("not in this release")
+
 // Fetch downloads the binary for version and checks it against the
 // release's checksums.txt. It never returns unverified bytes.
 func (s Source) Fetch(ctx context.Context, version string) ([]byte, error) {
 	s = s.withDefaults()
+	return s.FetchAsset(ctx, version, AssetName(version, s.GOOS, s.GOARCH))
+}
+
+// FetchHelper downloads the Touch ID helper for version (macOS).
+func (s Source) FetchHelper(ctx context.Context, version string) ([]byte, error) {
+	s = s.withDefaults()
+	return s.FetchAsset(ctx, version, HelperAssetName(version, s.GOARCH))
+}
+
+// FetchAsset downloads one release file and checks it against the
+// release's checksums.txt. It never returns unverified bytes.
+func (s Source) FetchAsset(ctx context.Context, version, name string) ([]byte, error) {
+	s = s.withDefaults()
 	if !tagRE.MatchString(version) {
 		return nil, fmt.Errorf("version %q: want a tag like v0.1.0", version)
 	}
-	name := AssetName(version, s.GOOS, s.GOARCH)
 	base := s.Download + "/" + version + "/"
 	sums, err := s.get(ctx, base+"checksums.txt", 1<<20)
 	if errors.Is(err, errNotFound) {
@@ -125,11 +146,11 @@ func (s Source) Fetch(ctx context.Context, version string) ([]byte, error) {
 	}
 	want, err := checksumFor(sums, name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w (%s %v)", ErrNoAsset, version, err)
 	}
 	bin, err := s.get(ctx, base+name, maxBinary)
 	if errors.Is(err, errNotFound) {
-		return nil, fmt.Errorf("release %s has no build for %s/%s", version, s.GOOS, s.GOARCH)
+		return nil, fmt.Errorf("%w: release %s has no file %s", ErrNoAsset, version, name)
 	}
 	if err != nil {
 		return nil, err
