@@ -23,9 +23,12 @@ async function copyPage() {
 copyButton.addEventListener('click', copyPage);
 
 // Mobile has the same native trees, collapsed initially to keep the article first.
+// They settle closed for a frame with transitions off, so the load shows no slide.
 if (matchMedia('(max-width: 760px)').matches) {
+  document.body.classList.add('settling');
   document.querySelector('.nav-root').open = false;
   document.querySelector('.reading-guide > details').open = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('settling')));
 }
 
 const guideLinks = [...document.querySelectorAll('.reading-guide a')];
@@ -48,16 +51,50 @@ function updateProgress() {
   if (!cssProgress) progress.style.setProperty('--read', max > 0 ? Math.min(1, scrollY / max) : 0);
 }
 
+// The guide's tint glides to the new entry instead of jumping: the new entry's
+// ::before starts where the old tint is drawn and settles into place. Transform
+// only, and measured before anything is written.
+const motion = getComputedStyle(document.documentElement);
+const ease = motion.getPropertyValue('--docs-ease').trim() || 'ease-out';
+const reveal = parseFloat(motion.getPropertyValue('--docs-reveal')) || 240;
+const fast = parseFloat(motion.getPropertyValue('--docs-fast')) || 160;
+const glides = !reduced && typeof KeyframeEffect === 'function' && 'pseudoElement' in KeyframeEffect.prototype;
+if (glides) guide.classList.add('glides');
+let tint;
+function box(link) {
+  if (!(link.checkVisibility?.() ?? true)) return null; // inside a closed branch
+  const rect = link.getBoundingClientRect();
+  return rect.width && rect.height ? rect : null;
+}
+function drawn(link) { // where the tint is on screen, mid-glide included
+  const rect = box(link);
+  if (!rect) return null;
+  const m = new DOMMatrixReadOnly(getComputedStyle(link, '::before').transform);
+  return { x: rect.left + m.e, y: rect.top + m.f, w: rect.width * m.a, h: rect.height * m.d };
+}
+function glide(link, from, to) {
+  tint?.cancel();
+  tint = from
+    ? link.animate([
+      { transform: `translate(${from.x - to.left}px, ${from.y - to.top}px) scale(${from.w / to.width}, ${from.h / to.height})` },
+      { transform: 'none' },
+    ], { duration: reveal, easing: ease, pseudoElement: '::before' })
+    : link.animate([{ opacity: 0 }, { opacity: 1 }], { duration: fast, easing: 'ease-out', pseudoElement: '::before' });
+}
+
 let lastActive = -1;
 function markSection() {
   let active = 0;
   headings.forEach((heading, i) => {
     if (heading.getBoundingClientRect().top <= 120) active = i;
   });
+  const to = glides && lastActive >= 0 && active !== lastActive ? box(guideLinks[active]) : null;
+  const from = to && drawn(guideLinks[lastActive]);
   guideLinks.forEach((link, i) => {
     if (i === active) link.setAttribute('aria-current', 'location');
     else link.removeAttribute('aria-current');
   });
+  if (to) glide(guideLinks[active], from, to);
   // Keep the current entry in view when the guide is taller than the screen.
   if (active !== lastActive && guideLinks[active] && guide.scrollHeight > guide.clientHeight) {
     guideLinks[active].scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
